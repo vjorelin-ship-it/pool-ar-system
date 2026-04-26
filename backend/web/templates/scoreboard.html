@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>台球AR投影系统 - 比分牌</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #0a0a1a;
+            color: #fff;
+            font-family: 'Microsoft YaHei', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+        .scoreboard {
+            text-align: center;
+            width: 90vw;
+            max-width: 1200px;
+        }
+        .title {
+            font-size: 2rem;
+            color: #4fc3f7;
+            margin-bottom: 30px;
+        }
+        .scores {
+            display: flex;
+            justify-content: center;
+            gap: 60px;
+            margin-bottom: 40px;
+        }
+        .player {
+            padding: 20px 40px;
+            border-radius: 12px;
+            background: #162447;
+            min-width: 250px;
+        }
+        .player.active {
+            background: #1a3a2e;
+            border: 2px solid #4caf50;
+        }
+        .player-name {
+            font-size: 1.5rem;
+            color: #90caf9;
+            margin-bottom: 10px;
+        }
+        .player-score {
+            font-size: 4rem;
+            font-weight: bold;
+            color: #fff;
+        }
+        .player-balls {
+            font-size: 1rem;
+            color: #888;
+            margin-top: 8px;
+        }
+        .status {
+            font-size: 1.5rem;
+            padding: 10px 20px;
+            border-radius: 8px;
+        }
+        .status.match { color: #4caf50; }
+        .status.training { color: #ff9800; }
+        .status.idle { color: #888; }
+        .game-over {
+            font-size: 2rem;
+            color: #ffd54f;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="scoreboard">
+        <div class="title" id="title">台球AR投影系统</div>
+        <div class="scores">
+            <div class="player" id="player1">
+                <div class="player-name">选手一</div>
+                <div class="player-score" id="score1">0</div>
+                <div class="player-balls" id="balls1">--</div>
+            </div>
+            <div class="player" id="player2">
+                <div class="player-name">选手二</div>
+                <div class="player-score" id="score2">0</div>
+                <div class="player-balls" id="balls2">--</div>
+            </div>
+        </div>
+        <div class="status idle" id="status">等待连接...</div>
+        <div id="gameover" class="game-over" style="display:none;"></div>
+    </div>
+
+    <script>
+        const ws = new WebSocket(`ws://${location.hostname}:8000/api/ws/phone`);
+
+        ws.onmessage = (event) => {
+            const msg = JSON.parse(event.data);
+
+            if (msg.type === 'score_update') {
+                const s = msg.score;
+                document.getElementById('score1').textContent = s.player1_score;
+                document.getElementById('score2').textContent = s.player2_score;
+                document.getElementById('player1').className =
+                    s.current_player === 1 ? 'player active' : 'player';
+                document.getElementById('player2').className =
+                    s.current_player === 2 ? 'player active' : 'player';
+
+                if (s.game_over) {
+                    document.getElementById('gameover').style.display = 'block';
+                    document.getElementById('gameover').textContent =
+                        '选手' + s.winner + ' 获胜！';
+                }
+                document.getElementById('status').textContent = '比赛进行中';
+                document.getElementById('status').className = 'status match';
+            }
+
+            if (msg.type === 'table_state') {
+                document.getElementById('title').textContent = '台球AR投影系统 - 已连接';
+            }
+        };
+
+        ws.onclose = () => {
+            document.getElementById('status').textContent = '连接断开，正在重连...';
+            document.getElementById('status').className = 'status idle';
+        };
+
+        ws.onerror = () => {
+            document.getElementById('status').textContent = '连接错误';
+        };
+    </script>
+</body>
+</html>

@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from .routes import router
+from web.scoreboard_app import router as scoreboard_router
 
 
 @asynccontextmanager
@@ -27,5 +28,6 @@ def create_app() -> FastAPI:
     )
 
     app.include_router(router)
+    app.include_router(scoreboard_router)
 
     return app
