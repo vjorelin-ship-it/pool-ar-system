@@ -1,4 +1,5 @@
 @echo off
+chcp 65001 >nul
 title 台球AR投影系统 - 后端服务
 cd /d %~dp0\backend
 

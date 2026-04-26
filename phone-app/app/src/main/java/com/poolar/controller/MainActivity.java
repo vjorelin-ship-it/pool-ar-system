@@ -2,6 +2,7 @@ package com.poolar.controller;
 
 import android.os.Bundle;
 import android.widget.Button;
+import android.widget.EditText;
 import android.widget.TextView;
 import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
@@ -11,7 +12,8 @@ import com.poolar.controller.network.ServiceDiscovery;
 public class MainActivity extends AppCompatActivity {
     private TextView connectionStatus;
     private ApiClient apiClient;
-    private Button btnStart, btnStop, btnMatch, btnTraining, btnChallenge;
+    private Button btnStart, btnStop, btnMatch, btnTraining, btnChallenge, btnConnect;
+    private EditText manualIpInput;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -23,25 +25,48 @@ public class MainActivity extends AppCompatActivity {
         btnMatch = findViewById(R.id.btnMatchMode);
         btnTraining = findViewById(R.id.btnTrainingMode);
         btnChallenge = findViewById(R.id.btnChallengeMode);
+        btnConnect = findViewById(R.id.btnConnect);
+        manualIpInput = findViewById(R.id.manualIp);
+        enableButtons(false);
+        startDiscovery();
+
+        // Manual connect button
+        btnConnect.setOnClickListener(v -> {
+            String ip = manualIpInput.getText().toString().trim();
+            if (!ip.isEmpty()) {
+                connectTo(ip);
+            } else {
+                Toast.makeText(this, "请输入IP地址", Toast.LENGTH_SHORT).show();
+            }
+        });
+    }
+
+    private void startDiscovery() {
         connectionStatus.setText("正在搜索服务器...");
         new ServiceDiscovery().discoverServer(new ServiceDiscovery.DiscoveryCallback() {
             @Override
             public void onFound(String host, int port) {
-                apiClient = new ApiClient(host);
-                runOnUiThread(() -> {
-                    connectionStatus.setText("已连接: " + host);
-                    connectionStatus.setTextColor(0xFF4CAF50);
-                    enableButtons(true);
-                });
+                connectTo(host);
             }
             @Override
             public void onError(String message) {
                 runOnUiThread(() -> {
-                    connectionStatus.setText("连接失败: " + message);
+                    connectionStatus.setText("自动发现失败，请手动输入IP");
                     connectionStatus.setTextColor(0xFFF44336);
                 });
             }
         });
+    }
+
+    private void connectTo(String host) {
+        apiClient = new ApiClient(host);
+        runOnUiThread(() -> {
+            connectionStatus.setText("已连接: " + host);
+            connectionStatus.setTextColor(0xFF4CAF50);
+            manualIpInput.setText(host);
+            enableButtons(true);
+        });
+    }
         btnStart.setOnClickListener(v -> {
             if (apiClient != null) apiClient.startSystem(callback("系统已启动"));
         });
