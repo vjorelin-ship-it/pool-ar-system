@@ -117,6 +117,29 @@ from fastapi import WebSocket, WebSocketDisconnect
 from .websocket import manager
 
 
+@router.post("/calibration/start")
+async def start_calibration():
+    system_state["calibration"] = {
+        "active": True,
+        "markers": [],
+        "table_detected": False,
+        "status": "Calibration starting...",
+    }
+    return {"status": "calibration_started"}
+
+
+@router.post("/calibration/stop")
+async def stop_calibration():
+    cal = system_state.get("calibration", {})
+    cal["active"] = False
+    return {"status": "calibration_stopped"}
+
+
+@router.get("/calibration/status")
+async def get_calibration_status():
+    return system_state.get("calibration", {"active": False})
+
+
 @router.websocket("/ws/phone")
 async def phone_websocket(ws: WebSocket):
     await manager.connect_phone(ws)
@@ -130,6 +153,16 @@ async def phone_websocket(ws: WebSocket):
 @router.websocket("/ws/projector")
 async def projector_websocket(ws: WebSocket):
     await manager.connect_projector(ws)
+    try:
+        while True:
+            await ws.receive_text()
+    except WebSocketDisconnect:
+        manager.disconnect(ws)
+
+
+@router.websocket("/ws/camera-preview")
+async def camera_preview_websocket(ws: WebSocket):
+    await manager.connect_camera_preview(ws)
     try:
         while True:
             await ws.receive_text()
