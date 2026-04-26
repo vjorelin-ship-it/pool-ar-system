@@ -1,14 +1,13 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
+from .routes import router
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup
     print("[API] Server starting...")
     yield
-    # Shutdown
     print("[API] Server shutting down...")
 
 
@@ -27,8 +26,6 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
-    @app.get("/api/status")
-    async def get_status():
-        return {"status": "running", "version": "1.0.0"}
+    app.include_router(router)
 
     return app
