@@ -113,11 +113,65 @@ class PhysicsEngine:
 
     def calculate_bank_shot(self, cue_pos: Vec2, target_pos: Vec2,
                             pocket_pos: Vec2) -> ShotResult:
-        """Calculate a one-cushion bank shot."""
-        # Reflect target across the nearest cushion
-        reflected = self._reflect_across_cushion(target_pos, pocket_pos)
-        # Now calculate as if the pocket is at the reflected position
-        return self.calculate_shot(cue_pos, target_pos, reflected)
+        """Calculate a one-cushion bank shot using pocket mirroring.
+
+        Reflects the pocket across each cushion to create a 'phantom pocket',
+        then checks if a valid shot exists. The target ball bounces off the
+        cushion toward the real pocket, modeled by aiming at the phantom.
+        """
+        # Phantom pockets mirrored across each cushion edge
+        reflections = [
+            Vec2(pocket_pos.x, -pocket_pos.y),                            # top
+            Vec2(pocket_pos.x, 2 * self.TABLE_HEIGHT - pocket_pos.y),     # bottom
+            Vec2(-pocket_pos.x, pocket_pos.y),                            # left
+            Vec2(2 * self.TABLE_WIDTH - pocket_pos.x, pocket_pos.y),      # right
+        ]
+
+        best_shot = self._no_shot()
+        best_score = float("inf")
+
+        for phantom in reflections:
+            # Direction from target to phantom pocket
+            to_pocket = phantom - target_pos
+            to_pocket_n = to_pocket.normalized()
+
+            aim_point = Vec2(
+                target_pos.x - to_pocket_n.x * self.BALL_RADIUS * 2,
+                target_pos.y - to_pocket_n.y * self.BALL_RADIUS * 2,
+            )
+
+            to_aim = aim_point - cue_pos
+            dist_to_aim = to_aim.length()
+
+            if dist_to_aim < self.BALL_RADIUS * 2:
+                continue
+
+            cue_to_target = target_pos - cue_pos
+            angle = self._angle_between(cue_to_target, to_pocket)
+
+            if abs(angle) > math.pi / 2:  # 90° max for bank shots
+                continue
+
+            cue_speed = dist_to_aim * 0.2
+
+            shot = ShotResult(
+                cue_path=[cue_pos, aim_point],
+                target_path=[target_pos, pocket_pos],
+                target_pocket=pocket_pos,
+                cue_speed=cue_speed,
+                target_speed=cue_speed * 0.6,
+                success=True,
+                cue_final_pos=Vec2(
+                    cue_pos.x + to_pocket_n.x * dist_to_aim * 0.3,
+                    cue_pos.y + to_pocket_n.y * dist_to_aim * 0.3,
+                ),
+            )
+
+            if shot.cue_speed < best_score:
+                best_score = shot.cue_speed
+                best_shot = shot
+
+        return best_shot
 
     def find_best_shot(self, cue_pos: Vec2, target_pos: Vec2) -> ShotResult:
         """Find the best shot (direct or bank) for a target ball."""
@@ -140,15 +194,6 @@ class PhysicsEngine:
             cue_path=[], target_path=[], target_pocket=Vec2(0, 0),
             cue_speed=0, target_speed=0, success=False,
         )
-
-    def _reflect_across_cushion(self, pos: Vec2, pocket: Vec2) -> Vec2:
-        """Reflect position across the nearest cushion for bank shot calc."""
-        dx = pocket.x - pos.x
-        dy = pocket.y - pos.y
-        if abs(dx) < abs(dy):
-            return Vec2(-pos.x, pos.y)
-        else:
-            return Vec2(pos.x, -pos.y)
 
     @staticmethod
     def _angle_between(v1: Vec2, v2: Vec2) -> float:

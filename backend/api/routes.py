@@ -113,7 +113,7 @@ async def verify_placement(cue_pos: list, target_pos: list):
     return tm.verify_placement(tuple(cue_pos), tuple(target_pos))
 
 
-from fastapi import WebSocket
+from fastapi import WebSocket, WebSocketDisconnect
 from .websocket import manager
 
 

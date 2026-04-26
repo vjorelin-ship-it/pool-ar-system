@@ -79,7 +79,7 @@ class MatchMode:
                 s.player2_balls = "stripes"
             else:
                 s.player1_balls = "stripes"
-                s.player2_balls = "stripes"
+                s.player2_balls = "solids"
             return {"action": "assign", "p1": s.player1_balls,
                     "p2": s.player2_balls, "player": 1}
         return {"action": "open_table", "player": 1}
