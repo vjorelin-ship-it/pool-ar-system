@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="#0d1b2a"
+    android:padding="16dp">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="台球AR投影系统"
+        android:textColor="#4fc3f7"
+        android:textSize="24sp"
+        android:layout_marginBottom="16dp" />
+
+    <TextView
+        android:id="@+id/connectionStatus"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="未连接"
+        android:textColor="#888"
+        android:textSize="14sp"
+        android:layout_marginBottom="24dp" />
+
+    <Button
+        android:id="@+id/btnStart"
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:text="启动系统"
+        android:textSize="16sp"
+        android:backgroundTint="#1b5e20"
+        android:layout_marginBottom="8dp" />
+
+    <Button
+        android:id="@+id/btnStop"
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:text="停止系统"
+        android:textSize="16sp"
+        android:backgroundTint="#b71c1c"
+        android:layout_marginBottom="24dp" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="模式选择"
+        android:textColor="#90caf9"
+        android:textSize="18sp"
+        android:layout_marginBottom="12dp" />
+
+    <Button
+        android:id="@+id/btnMatchMode"
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:text="比赛模式"
+        android:textSize="16sp"
+        android:backgroundTint="#1a237e"
+        android:layout_marginBottom="8dp" />
+
+    <Button
+        android:id="@+id/btnTrainingMode"
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:text="训练模式"
+        android:textSize="16sp"
+        android:backgroundTint="#e65100"
+        android:layout_marginBottom="8dp" />
+
+    <Button
+        android:id="@+id/btnChallengeMode"
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:text="闯关模式"
+        android:textSize="16sp"
+        android:backgroundTint="#4a148c" />
+
+</LinearLayout>
