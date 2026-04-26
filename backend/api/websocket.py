@@ -22,6 +22,9 @@ class ConnectionManager:
         self._phone_clients.discard(ws)
         self._projector_clients.discard(ws)
 
+    def has_projector_clients(self) -> bool:
+        return len(self._projector_clients) > 0
+
     async def broadcast_table_state(self) -> None:
         data = json.dumps({
             "type": "table_state",

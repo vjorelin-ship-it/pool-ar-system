@@ -82,7 +82,8 @@ public class MainActivity extends Activity {
                 @Override
                 public void onOpen(ServerHandshake handshake) {
                     runOnUiThread(() -> {
-                        statusText.setVisibility(View.GONE);
+                        statusText.setText("已连接，等待投影画面...");
+                        statusText.setVisibility(View.VISIBLE);
                         Log.d(TAG, "Connected to server");
                     });
                 }
@@ -95,7 +96,10 @@ public class MainActivity extends Activity {
                             String base64 = json.get("image").getAsString();
                             byte[] imgBytes = Base64.decode(base64, Base64.DEFAULT);
                             final Bitmap bitmap = BitmapFactory.decodeByteArray(imgBytes, 0, imgBytes.length);
-                            runOnUiThread(() -> projectionView.setImageBitmap(bitmap));
+                            runOnUiThread(() -> {
+                                projectionView.setImageBitmap(bitmap);
+                                statusText.setVisibility(View.GONE);
+                            });
                         }
                     } catch (Exception e) {
                         Log.e(TAG, "Error decoding image", e);

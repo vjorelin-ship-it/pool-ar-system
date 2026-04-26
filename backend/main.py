@@ -1,3 +1,4 @@
+import asyncio
 import sys
 import os
 import json
@@ -20,6 +21,7 @@ from camera.rtsp_camera import RtspCamera
 from physics.engine import PhysicsEngine, Vec2
 from game.match_mode import MatchMode
 from game.training_mode import TrainingMode
+from renderer.projector_renderer import ProjectorRenderer, ProjectionOverlay
 
 
 class PoolARSystem:
@@ -28,8 +30,13 @@ class PoolARSystem:
         self.physics = PhysicsEngine()
         self.match_mode = MatchMode()
         self.training_mode = TrainingMode()
+        self.renderer = ProjectorRenderer()
         self._running = False
         self._vision_thread: Optional[threading.Thread] = None
+        self._loop: Optional[asyncio.AbstractEventLoop] = None
+
+    def set_loop(self, loop: asyncio.AbstractEventLoop) -> None:
+        self._loop = loop
 
     def start(self) -> None:
         print("[System] Starting Pool AR System...")
@@ -63,7 +70,20 @@ class PoolARSystem:
                 frame = self.camera.get_frame()
                 if frame and frame.valid:
                     system_state["table_state"]["detected"] = True
-            time.sleep(0.1)
+
+            # Render and broadcast projection image at ~2 fps
+            if self._loop and manager.has_projector_clients():
+                try:
+                    image_b64 = self.renderer.render_to_base64(None)
+                    asyncio.run_coroutine_threadsafe(
+                        manager.broadcast_projection(image_b64),
+                        self._loop,
+                    )
+                except Exception:
+                    pass
+                time.sleep(0.5)
+            else:
+                time.sleep(0.1)
 
     @staticmethod
     def _get_local_ip() -> str:
@@ -116,7 +136,7 @@ def create_app(system: PoolARSystem) -> FastAPI:
     return app
 
 
-if __name__ == "__main__":
+async def main() -> None:
     system = PoolARSystem()
     system.start()
 
@@ -124,10 +144,19 @@ if __name__ == "__main__":
         target=PoolARSystem.start_discovery_service, daemon=True)
     disc_thread.start()
 
+    system.set_loop(asyncio.get_running_loop())
+
     app = create_app(system)
     print(f"\n[Server] Starting API at http://0.0.0.0:{settings.API_PORT}")
     print("[Server] Scoreboard at http://<ip>:{}/scoreboard".format(
         settings.API_PORT))
     print("[Server] Phone app can now discover and connect\n")
 
-    uvicorn.run(app, host=settings.API_HOST, port=settings.API_PORT)
+    config = uvicorn.Config(app, host=settings.API_HOST,
+                            port=settings.API_PORT)
+    server = uvicorn.Server(config)
+    await server.serve()
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
