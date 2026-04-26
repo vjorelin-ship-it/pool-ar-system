@@ -111,3 +111,27 @@ async def verify_placement(cue_pos: list, target_pos: list):
     if not tm:
         raise HTTPException(400, "Training mode not initialized")
     return tm.verify_placement(tuple(cue_pos), tuple(target_pos))
+
+
+from fastapi import WebSocket
+from .websocket import manager
+
+
+@router.websocket("/ws/phone")
+async def phone_websocket(ws: WebSocket):
+    await manager.connect_phone(ws)
+    try:
+        while True:
+            await ws.receive_text()
+    except WebSocketDisconnect:
+        manager.disconnect(ws)
+
+
+@router.websocket("/ws/projector")
+async def projector_websocket(ws: WebSocket):
+    await manager.connect_projector(ws)
+    try:
+        while True:
+            await ws.receive_text()
+    except WebSocketDisconnect:
+        manager.disconnect(ws)
