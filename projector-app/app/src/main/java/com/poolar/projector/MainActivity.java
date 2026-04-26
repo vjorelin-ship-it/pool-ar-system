@@ -1,14 +1,18 @@
 package com.poolar.projector;
 
 import android.app.Activity;
+import android.app.AlertDialog;
+import android.content.SharedPreferences;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.os.Bundle;
 import android.os.Handler;
+import android.text.InputType;
 import android.util.Base64;
 import android.util.Log;
 import android.view.View;
 import android.view.WindowManager;
+import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.TextView;
 
@@ -23,7 +27,7 @@ public class MainActivity extends Activity {
     private WebSocketClient wsClient;
     private Handler reconnectHandler = new Handler();
     private static final String TAG = "PoolARProjector";
-    private static final String DEFAULT_SERVER = "ws://192.168.1.100:8000/api/ws/projector";
+    private static final String DEFAULT_SERVER = "ws://192.168.0.35:8000/api/ws/projector";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -39,7 +43,35 @@ public class MainActivity extends Activity {
         setContentView(R.layout.activity_projection);
         projectionView = findViewById(R.id.projectionView);
         statusText = findViewById(R.id.statusText);
+        statusText.setOnLongClickListener(v -> {
+            showSettingsDialog();
+            return true;
+        });
         connectWebSocket();
+    }
+
+    private void showSettingsDialog() {
+        SharedPreferences prefs = getSharedPreferences("prefs", MODE_PRIVATE);
+        String currentUrl = prefs.getString("server_url", DEFAULT_SERVER);
+        EditText input = new EditText(this);
+        input.setInputType(InputType.TYPE_CLASS_TEXT);
+        input.setText(currentUrl);
+        input.setSelectAllOnFocus(true);
+        new AlertDialog.Builder(this)
+            .setTitle("设置服务器地址")
+            .setMessage("当前: " + currentUrl)
+            .setView(input)
+            .setPositiveButton("连接", (d, w) -> {
+                String url = input.getText().toString().trim();
+                if (!url.isEmpty()) {
+                    prefs.edit().putString("server_url", url).apply();
+                    if (wsClient != null) wsClient.close();
+                    statusText.setText("正在连接...");
+                    connectWebSocket();
+                }
+            })
+            .setNegativeButton("取消", null)
+            .show();
     }
 
     private void connectWebSocket() {
