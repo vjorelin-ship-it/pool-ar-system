@@ -66,20 +66,35 @@ class PoolARSystem:
             time.sleep(0.1)
 
     @staticmethod
+    def _get_local_ip() -> str:
+        """Get the actual LAN IP address reliably."""
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.settimeout(1)
+            s.connect(("8.8.8.8", 80))
+            ip = s.getsockname()[0]
+            s.close()
+            return ip
+        except Exception:
+            return socket.gethostbyname(socket.gethostname())
+
+    @staticmethod
     def start_discovery_service() -> None:
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
         sock.bind(("0.0.0.0", 8001))
 
+        local_ip = PoolARSystem._get_local_ip()
+        print(f"[Discovery] Service started on {local_ip}:8001")
+
         while True:
             try:
                 data, addr = sock.recvfrom(256)
                 if data.decode().startswith("POOL_AR_DISCOVER"):
-                    hostname = socket.gethostbyname(socket.gethostname())
-                    response = f"POOL_AR_SERVER:{hostname}"
+                    response = f"POOL_AR_SERVER:{local_ip}"
                     sock.sendto(response.encode(), addr)
-                    print(f"[Discovery] Responded to {addr}")
+                    print(f"[Discovery] Responded to {addr} -> {local_ip}")
             except Exception:
                 pass
 
