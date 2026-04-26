@@ -1,111 +1,79 @@
 package com.poolar.controller;
 
 import android.os.Bundle;
-import android.widget.Button;
-import android.widget.EditText;
-import android.widget.TextView;
-import android.widget.Toast;
+import android.widget.FrameLayout;
 import androidx.appcompat.app.AppCompatActivity;
-import com.poolar.controller.network.ApiClient;
-import com.poolar.controller.network.ServiceDiscovery;
+import androidx.fragment.app.Fragment;
+import androidx.fragment.app.FragmentManager;
+import androidx.fragment.app.FragmentTransaction;
+import com.google.android.material.bottomnavigation.BottomNavigationView;
+import com.poolar.controller.ui.HomeFragment;
+import com.poolar.controller.ui.ActiveFragment;
+import com.poolar.controller.ui.SettingsFragment;
 
 public class MainActivity extends AppCompatActivity {
-    private TextView connectionStatus;
-    private ApiClient apiClient;
-    private Button btnStart, btnStop, btnMatch, btnTraining, btnChallenge, btnConnect;
-    private EditText manualIpInput;
+
+    private BottomNavigationView bottomNav;
+    private String currentMode = "idle"; // idle, match, training, challenge
+    private String player1Name = "选手一";
+    private String player2Name = "选手二";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        connectionStatus = findViewById(R.id.connectionStatus);
-        btnStart = findViewById(R.id.btnStart);
-        btnStop = findViewById(R.id.btnStop);
-        btnMatch = findViewById(R.id.btnMatchMode);
-        btnTraining = findViewById(R.id.btnTrainingMode);
-        btnChallenge = findViewById(R.id.btnChallengeMode);
-        btnConnect = findViewById(R.id.btnConnect);
-        manualIpInput = findViewById(R.id.manualIp);
-        enableButtons(false);
-        startDiscovery();
 
-        // Manual connect button
-        btnConnect.setOnClickListener(v -> {
-            String ip = manualIpInput.getText().toString().trim();
-            if (!ip.isEmpty()) {
-                connectTo(ip);
-            } else {
-                Toast.makeText(this, "请输入IP地址", Toast.LENGTH_SHORT).show();
+        bottomNav = findViewById(R.id.bottom_nav);
+
+        if (savedInstanceState == null) {
+            switchFragment(new HomeFragment(), "home");
+        }
+
+        bottomNav.setOnItemSelectedListener(item -> {
+            Fragment f = null;
+            String tag = "";
+            int id = item.getItemId();
+            if (id == R.id.nav_home) {
+                f = new HomeFragment();
+                tag = "home";
+            } else if (id == R.id.nav_active) {
+                f = new ActiveFragment();
+                tag = "active";
+            } else if (id == R.id.nav_settings) {
+                f = new SettingsFragment();
+                tag = "settings";
             }
-        });
-
-        btnStart.setOnClickListener(v -> {
-            if (apiClient != null) apiClient.startSystem(callback("系统已启动"));
-        });
-        btnStop.setOnClickListener(v -> {
-            if (apiClient != null) apiClient.stopSystem(callback("系统已停止"));
-        });
-        btnMatch.setOnClickListener(v -> {
-            if (apiClient != null) apiClient.setMode("match", modeCallback("比赛模式已启动"));
-        });
-        btnTraining.setOnClickListener(v -> {
-            if (apiClient != null) apiClient.setMode("training", modeCallback("训练模式已启动"));
-        });
-        btnChallenge.setOnClickListener(v -> {
-            if (apiClient != null) apiClient.setMode("challenge", modeCallback("闯关模式已启动"));
-        });
-    }
-
-    private void startDiscovery() {
-        connectionStatus.setText("正在搜索服务器...");
-        new ServiceDiscovery().discoverServer(new ServiceDiscovery.DiscoveryCallback() {
-            @Override
-            public void onFound(String host, int port) {
-                connectTo(host);
+            if (f != null) {
+                switchFragment(f, tag);
             }
-            @Override
-            public void onError(String message) {
-                runOnUiThread(() -> {
-                    connectionStatus.setText("自动发现失败，请手动输入IP");
-                    connectionStatus.setTextColor(0xFFF44336);
-                });
-            }
+            return true;
         });
     }
 
-    private void connectTo(String host) {
-        apiClient = new ApiClient(host);
-        runOnUiThread(() -> {
-            connectionStatus.setText("已连接: " + host);
-            connectionStatus.setTextColor(0xFF4CAF50);
-            manualIpInput.setText(host);
-            enableButtons(true);
-        });
-    }
-    private void enableButtons(boolean enabled) {
-        btnStart.setEnabled(enabled);
-        btnStop.setEnabled(enabled);
-        btnMatch.setEnabled(enabled);
-        btnTraining.setEnabled(enabled);
-        btnChallenge.setEnabled(enabled);
+    private void switchFragment(Fragment fragment, String tag) {
+        FragmentManager fm = getSupportFragmentManager();
+        FragmentTransaction tx = fm.beginTransaction();
+        tx.replace(R.id.fragment_container, fragment, tag);
+        tx.commit();
     }
 
-    private ApiClient.ApiCallback<Void> callback(String msg) {
-        return new ApiClient.ApiCallback<Void>() {
-            @Override public void onResult(Void result) { showToast(msg); }
-            @Override public void onError(String error) { showToast("失败: " + error); }
-        };
+    public void switchTab(int tabId) {
+        bottomNav.setSelectedItemId(tabId);
     }
 
-    private ApiClient.ApiCallback<Object> modeCallback(String msg) {
-        return new ApiClient.ApiCallback<Object>() {
-            @Override public void onResult(Object result) { showToast(msg); }
-            @Override public void onError(String error) { showToast("失败: " + error); }
-        };
+    public void setCurrentMode(String mode) {
+        this.currentMode = mode;
     }
 
-    private void showToast(String message) {
-        runOnUiThread(() -> Toast.makeText(MainActivity.this, message, Toast.LENGTH_SHORT).show());
+    public String getCurrentMode() {
+        return currentMode;
     }
+
+    public void setPlayerNames(String p1, String p2) {
+        this.player1Name = p1;
+        this.player2Name = p2;
+    }
+
+    public String getPlayer1Name() { return player1Name; }
+    public String getPlayer2Name() { return player2Name; }
 }

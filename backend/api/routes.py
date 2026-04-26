@@ -48,6 +48,9 @@ async def set_mode(mode: str):
         info = system_state["training_mode"].start_challenge()
         return {"mode": mode, "info": info}
     if mode == "training" and system_state.get("training_mode"):
+        # Training mode: all levels accessible, not challenge-locked
+        tm = system_state["training_mode"]
+        tm.session.challenge_mode = False
         return {"mode": mode, "info": "Select a level"}
     return {"mode": mode}
 
@@ -102,6 +105,10 @@ async def select_training_level(level: int):
     result = tm.select_level(level)
     if "error" in result:
         raise HTTPException(400, result["error"])
+    # Broadcast drill info via WebSocket to phone clients
+    from .websocket import manager
+    import asyncio
+    asyncio.ensure_future(manager.broadcast_drill_info(result))
     return result
 
 
@@ -140,6 +147,34 @@ async def get_calibration_status():
     return system_state.get("calibration", {"active": False})
 
 
+@router.post("/ai-train/start")
+async def start_ai_train():
+    """开始AI训练：投影逐个显示标准击球位置，用户击球采集数据"""
+    if not system_state.get("training_mode"):
+        raise HTTPException(400, "Training mode not initialized")
+    tm = system_state["training_mode"]
+    tm.session.challenge_mode = False
+    system_state["ai_training"] = {
+        "active": True,
+        "drill_index": 0,
+        "total_drills": 10,
+        "status": "AI训练中",
+    }
+    return {"status": "ai_training_started", "total": 10}
+
+
+@router.post("/ai-train/stop")
+async def stop_ai_train():
+    train = system_state.get("ai_training", {})
+    train["active"] = False
+    return {"status": "ai_training_stopped"}
+
+
+@router.get("/ai-train/status")
+async def get_ai_train_status():
+    return system_state.get("ai_training", {"active": False})
+
+
 @router.websocket("/ws/phone")
 async def phone_websocket(ws: WebSocket):
     await manager.connect_phone(ws)
@@ -163,6 +198,16 @@ async def projector_websocket(ws: WebSocket):
 @router.websocket("/ws/camera-preview")
 async def camera_preview_websocket(ws: WebSocket):
     await manager.connect_camera_preview(ws)
+    try:
+        while True:
+            await ws.receive_text()
+    except WebSocketDisconnect:
+        manager.disconnect(ws)
+
+
+@router.websocket("/ws/projector-preview")
+async def projector_preview_websocket(ws: WebSocket):
+    await manager.connect_projector_preview(ws)
     try:
         while True:
             await ws.receive_text()

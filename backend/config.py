@@ -3,7 +3,7 @@ import os
 
 class Settings:
     # Camera
-    CAMERA_RTSP_URL: str = os.getenv("CAMERA_RTSP_URL", "rtsp://192.168.0.101:554/stream1")
+    CAMERA_RTSP_URL: str = os.getenv("CAMERA_RTSP_URL", "rtsp://admin:2Bzhaoleipi@192.168.0.101/stream1")
     CAMERA_FPS: int = 10
 
     # Server

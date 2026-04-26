@@ -1,6 +1,8 @@
 package com.poolar.controller.network;
 
+import com.google.gson.FieldNamingPolicy;
 import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
 import com.poolar.controller.model.Models;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
@@ -12,10 +14,13 @@ import com.google.gson.reflect.TypeToken;
 
 public class ApiClient {
     private final String baseUrl;
-    private final Gson gson = new Gson();
+    private final Gson gson;
 
     public ApiClient(String host) {
         this.baseUrl = "http://" + host + ":8000";
+        this.gson = new GsonBuilder()
+            .setFieldNamingPolicy(FieldNamingPolicy.LOWER_CASE_WITH_UNDERSCORES)
+            .create();
     }
 
     public interface ApiCallback<T> {
@@ -43,6 +48,15 @@ public class ApiClient {
     }
     public void selectLevel(int level, final ApiCallback<Models.DrillSession> callback) {
         post("/api/training/select-level?level=" + level, null, Models.DrillSession.class, callback);
+    }
+    public void startCalibration(final ApiCallback<Void> callback) {
+        post("/api/calibration/start", null, Void.class, callback);
+    }
+    public void stopCalibration(final ApiCallback<Void> callback) {
+        post("/api/calibration/stop", null, Void.class, callback);
+    }
+    public void getCalibrationStatus(final ApiCallback<CalibrationStatusResult> callback) {
+        get("/api/calibration/status", CalibrationStatusResult.class, callback);
     }
 
     private <T> void get(String path, Class<T> clazz, ApiCallback<T> callback) {
@@ -105,5 +119,12 @@ public class ApiClient {
         public String status, mode;
         public boolean camera, tableDetected;
         public int ballCount;
+    }
+
+    public static class CalibrationStatusResult {
+        public boolean active;
+        public boolean tableDetected;
+        public String status;
+        public String[][] markers;
     }
 }

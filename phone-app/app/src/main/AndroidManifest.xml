@@ -7,7 +7,7 @@
         android:allowBackup="true"
         android:label="台球AR控制"
         android:supportsRtl="true"
-        android:theme="@style/Theme.AppCompat.NoActionBar"
+        android:theme="@style/Theme.PoolAR"
         android:usesCleartextTraffic="true">
         <activity
             android:name=".MainActivity"

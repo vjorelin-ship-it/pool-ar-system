@@ -47,6 +47,7 @@ class ProjectorRenderer:
     def render(self, overlay: Optional[ProjectionOverlay] = None) -> bytes:
         """Render route lines on black background for projection overlay."""
         self._clear()
+        self._draw_table_outline()
         if overlay:
             self._draw_shot(overlay)
         buf = io.BytesIO()
@@ -92,6 +93,44 @@ class ProjectorRenderer:
 
     def _clear(self) -> None:
         self._draw.rectangle([0, 0, self.WIDTH, self.HEIGHT], fill=(0, 0, 0))
+
+    def _draw_table_outline(self) -> None:
+        """Draw subtle table outline and pocket markers for standby display."""
+        outline_color = (40, 40, 40)
+        # Table border
+        self._draw.rectangle(
+            [self.TABLE_LEFT, self.TABLE_TOP, self.TABLE_RIGHT, self.TABLE_BOTTOM],
+            outline=outline_color, width=1,
+        )
+        # Diamond markers on rails (small ticks)
+        for x_frac in [0.25, 0.5, 0.75]:
+            x = self.TABLE_LEFT + x_frac * self.TABLE_WIDTH
+            self._draw.line([x, self.TABLE_TOP - 5, x, self.TABLE_TOP + 5], fill=outline_color, width=1)
+            self._draw.line([x, self.TABLE_BOTTOM - 5, x, self.TABLE_BOTTOM + 5], fill=outline_color, width=1)
+        for y_frac in [0.25, 0.5, 0.75]:
+            y = self.TABLE_TOP + y_frac * self.TABLE_HEIGHT
+            self._draw.line([self.TABLE_LEFT - 5, y, self.TABLE_LEFT + 5, y], fill=outline_color, width=1)
+            self._draw.line([self.TABLE_RIGHT - 5, y, self.TABLE_RIGHT + 5, y], fill=outline_color, width=1)
+        # Pocket circles
+        pockets = [
+            (self.TABLE_LEFT, self.TABLE_TOP),
+            (self.WIDTH // 2, self.TABLE_TOP),
+            (self.TABLE_RIGHT, self.TABLE_TOP),
+            (self.TABLE_LEFT, self.TABLE_BOTTOM),
+            (self.WIDTH // 2, self.TABLE_BOTTOM),
+            (self.TABLE_RIGHT, self.TABLE_BOTTOM),
+        ]
+        for px, py in pockets:
+            r = 18
+            self._draw.ellipse(
+                [px - r, py - r, px + r, py + r],
+                outline=outline_color, width=1,
+            )
+        # Standby text
+        self._draw.text(
+            (self.WIDTH // 2 - 40, self.TABLE_BOTTOM + 40),
+            "待机中", fill=(60, 60, 60),
+        )
 
     def _draw_shot(self, overlay: ProjectionOverlay) -> None:
         if len(overlay.cue_path) >= 2:
@@ -142,7 +181,20 @@ class ProjectorRenderer:
         if overlay.label:
             self._draw.text(
                 (self.TABLE_LEFT + 10, self.TABLE_BOTTOM + 30),
-                overlay.label, fill=self.COLORS["text"],
+                overlay.label, fill=self.COLORS["text"], font=None,
+            )
+
+        # Render cue technique and power
+        tech_parts = []
+        if overlay.cue_technique:
+            tech_parts.append(f"杆法: {overlay.cue_technique}")
+        if overlay.cue_power:
+            tech_parts.append(f"力度: {overlay.cue_power}")
+        if tech_parts:
+            self._draw.text(
+                (self.TABLE_LEFT + 10, self.TABLE_BOTTOM + 60),
+                " | ".join(tech_parts),
+                fill=(200, 200, 100),
             )
 
     def _norm_to_proj(self, pos: Tuple[float, float]) -> Tuple[int, int]:

@@ -7,6 +7,7 @@ import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.os.Bundle;
 import android.os.Handler;
+import android.speech.tts.TextToSpeech;
 import android.text.InputType;
 import android.util.Base64;
 import android.util.Log;
@@ -15,17 +16,21 @@ import android.view.WindowManager;
 import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import org.java_websocket.client.WebSocketClient;
 import org.java_websocket.handshake.ServerHandshake;
 
 import java.net.URI;
+import java.util.Locale;
 
-public class MainActivity extends Activity {
+public class MainActivity extends Activity implements TextToSpeech.OnInitListener {
     private ImageView projectionView;
     private TextView statusText;
     private WebSocketClient wsClient;
     private Handler reconnectHandler = new Handler();
+    private TextToSpeech tts;
+    private boolean ttsReady = false;
     private static final String TAG = "PoolARProjector";
     private static final String DEFAULT_SERVER = "ws://192.168.0.35:8000/api/ws/projector";
 
@@ -47,8 +52,39 @@ public class MainActivity extends Activity {
             showSettingsDialog();
             return true;
         });
+
+        // Initialize TTS engine
+        tts = new TextToSpeech(this, this);
+
         connectWebSocket();
     }
+
+    // ─── TextToSpeech.OnInitListener ───────────────────────
+
+    @Override
+    public void onInit(int status) {
+        if (status == TextToSpeech.SUCCESS) {
+            int result = tts.setLanguage(Locale.CHINESE);
+            if (result == TextToSpeech.LANG_MISSING_DATA
+                || result == TextToSpeech.LANG_NOT_SUPPORTED) {
+                Log.w(TAG, "TTS: Chinese language not supported");
+                showToast("TTS: 中文语音暂不支持");
+            } else {
+                ttsReady = true;
+                Log.d(TAG, "TTS engine ready");
+            }
+        } else {
+            Log.e(TAG, "TTS engine init failed");
+        }
+    }
+
+    private void speak(String text) {
+        if (ttsReady && tts != null) {
+            tts.speak(text, TextToSpeech.QUEUE_ADD, null, null);
+        }
+    }
+
+    // ─── Settings dialog ───────────────────────────────────
 
     private void showSettingsDialog() {
         SharedPreferences prefs = getSharedPreferences("prefs", MODE_PRIVATE);
@@ -74,6 +110,8 @@ public class MainActivity extends Activity {
             .show();
     }
 
+    // ─── WebSocket ─────────────────────────────────────────
+
     private void connectWebSocket() {
         String serverUrl = getSharedPreferences("prefs", MODE_PRIVATE)
             .getString("server_url", DEFAULT_SERVER);
@@ -92,7 +130,9 @@ public class MainActivity extends Activity {
                     try {
                         com.google.gson.JsonObject json = new com.google.gson.Gson()
                             .fromJson(message, com.google.gson.JsonObject.class);
-                        if ("projection".equals(json.get("type").getAsString())) {
+                        String type = json.get("type").getAsString();
+
+                        if ("projection".equals(type)) {
                             String base64 = json.get("image").getAsString();
                             byte[] imgBytes = Base64.decode(base64, Base64.DEFAULT);
                             final Bitmap bitmap = BitmapFactory.decodeByteArray(imgBytes, 0, imgBytes.length);
@@ -100,9 +140,14 @@ public class MainActivity extends Activity {
                                 projectionView.setImageBitmap(bitmap);
                                 statusText.setVisibility(View.GONE);
                             });
+                        } else if ("announce".equals(type)) {
+                            // TTS announcement from backend announcer
+                            String text = json.get("text").getAsString();
+                            speak(text);
+                            Log.d(TAG, "Announce: " + text);
                         }
                     } catch (Exception e) {
-                        Log.e(TAG, "Error decoding image", e);
+                        Log.e(TAG, "Error processing message", e);
                     }
                 }
                 @Override
@@ -129,10 +174,20 @@ public class MainActivity extends Activity {
         }
     }
 
+    // ─── Lifecycle ─────────────────────────────────────────
+
     @Override
     protected void onDestroy() {
-        super.onDestroy();
+        if (tts != null) {
+            tts.stop();
+            tts.shutdown();
+        }
         reconnectHandler.removeCallbacksAndMessages(null);
         if (wsClient != null) wsClient.close();
+        super.onDestroy();
+    }
+
+    private void showToast(String msg) {
+        Toast.makeText(this, msg, Toast.LENGTH_SHORT).show();
     }
 }

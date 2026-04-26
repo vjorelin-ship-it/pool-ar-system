@@ -1,133 +1,318 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>台球AR投影系统 - 比分牌</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            background: #0a0a1a;
-            color: #fff;
-            font-family: 'Microsoft YaHei', sans-serif;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            overflow: hidden;
-        }
-        .scoreboard {
-            text-align: center;
-            width: 90vw;
-            max-width: 1200px;
-        }
-        .title {
-            font-size: 2rem;
-            color: #4fc3f7;
-            margin-bottom: 30px;
-        }
-        .scores {
-            display: flex;
-            justify-content: center;
-            gap: 60px;
-            margin-bottom: 40px;
-        }
-        .player {
-            padding: 20px 40px;
-            border-radius: 12px;
-            background: #162447;
-            min-width: 250px;
-        }
-        .player.active {
-            background: #1a3a2e;
-            border: 2px solid #4caf50;
-        }
-        .player-name {
-            font-size: 1.5rem;
-            color: #90caf9;
-            margin-bottom: 10px;
-        }
-        .player-score {
-            font-size: 4rem;
-            font-weight: bold;
-            color: #fff;
-        }
-        .player-balls {
-            font-size: 1rem;
-            color: #888;
-            margin-top: 8px;
-        }
-        .status {
-            font-size: 1.5rem;
-            padding: 10px 20px;
-            border-radius: 8px;
-        }
-        .status.match { color: #4caf50; }
-        .status.training { color: #ff9800; }
-        .status.idle { color: #888; }
-        .game-over {
-            font-size: 2rem;
-            color: #ffd54f;
-            margin-top: 20px;
-        }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>台球AR投影系统 - 比分牌</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0a0a1a; color: #fff;
+    font-family: 'Microsoft YaHei', sans-serif;
+    display: flex; justify-content: center; align-items: center;
+    min-height: 100vh; overflow: hidden;
+  }
+  .scoreboard { text-align: center; width: 95vw; max-width: 1400px; }
+  .title { font-size: 2rem; color: #4fc3f7; margin-bottom: 20px; }
+
+  .scores { display: flex; justify-content: center; gap: 40px; margin-bottom: 24px; }
+  .player {
+    padding: 24px 48px; border-radius: 12px; background: #162447; min-width: 300px;
+    border: 3px solid transparent; transition: all 0.3s;
+  }
+  .player.active { background: #1a3a2e; border-color: #4caf50; }
+  .player-name { font-size: 2rem; color: #90caf9; margin-bottom: 8px; }
+  .player-score { font-size: 5rem; font-weight: bold; color: #fff; }
+  .player-balls { font-size: 1.2rem; color: #aaa; margin-top: 6px; }
+
+  .status { font-size: 1.5rem; padding: 10px 20px; border-radius: 8px; }
+  .status.match { color: #4caf50; } .status.training { color: #ff9800; }
+  .status.idle { color: #888; }
+
+  .game-over { font-size: 2.5rem; color: #ffd54f; margin-top: 16px; }
+
+  /* Training mode section */
+  .training-section { margin-top: 20px; padding: 12px 20px; background: #0a1628; border-radius: 12px; display: none; }
+  .training-section .label { font-size: 1.1rem; color: #ff9800; }
+  .training-section .detail { font-size: 1rem; color: #ccc; margin-top: 4px; }
+  .training-section .stat { display: inline-block; font-size: 1.3rem; color: #81c784; margin: 8px 12px; }
+
+  /* Ball grid */
+  .ball-section { margin-top: 24px; }
+  .ball-section .label { font-size: 1.1rem; color: #888; margin-bottom: 8px; }
+  .ball-grid {
+    display: inline-flex; flex-direction: column; align-items: center; gap: 6px;
+    padding: 16px 24px; background: #0a1628; border-radius: 12px;
+  }
+  .ball-row { display: flex; gap: 8px; justify-content: center; }
+  .ball-cell { width: 48px; height: 48px; border-radius: 50%; display: inline-block; transition: opacity 0.3s; }
+  .ball-cell img { width: 48px; height: 48px; display: block; }
+  .ball-cell.dim { opacity: 0.2; }
+  .ball-summary { font-size: 1rem; color: #81c784; margin-top: 6px; }
+
+  #connectionDot {
+    display: inline-block; width: 14px; height: 14px; border-radius: 50%;
+    background: #888; margin-right: 8px; vertical-align: middle;
+  }
+  #connectionDot.connected { background: #4caf50; }
+  #connectionDot.disconnected { background: #f44336; }
+</style>
 </head>
 <body>
-    <div class="scoreboard">
-        <div class="title" id="title">台球AR投影系统</div>
-        <div class="scores">
-            <div class="player" id="player1">
-                <div class="player-name">选手一</div>
-                <div class="player-score" id="score1">0</div>
-                <div class="player-balls" id="balls1">--</div>
-            </div>
-            <div class="player" id="player2">
-                <div class="player-name">选手二</div>
-                <div class="player-score" id="score2">0</div>
-                <div class="player-balls" id="balls2">--</div>
-            </div>
-        </div>
-        <div class="status idle" id="status">等待连接...</div>
-        <div id="gameover" class="game-over" style="display:none;"></div>
+<div class="scoreboard">
+  <div class="title">
+    <span id="connectionDot"></span>
+    台球AR投影系统 - <span id="modeLabel">等待连接</span>
+  </div>
+  <div class="scores">
+    <div class="player" id="player1">
+      <div class="player-name" id="p1Name">选手一</div>
+      <div class="player-score" id="score1">0</div>
+      <div class="player-balls" id="balls1">--</div>
     </div>
+    <div class="player" id="player2">
+      <div class="player-name" id="p2Name">选手二</div>
+      <div class="player-score" id="score2">0</div>
+      <div class="player-balls" id="balls2">--</div>
+    </div>
+  </div>
+  <div class="status idle" id="status">等待连接...</div>
+  <div id="gameover" class="game-over" style="display:none;"></div>
 
-    <script>
-        const ws = new WebSocket(`ws://${location.hostname}:8000/api/ws/phone`);
+  <!-- Training mode section -->
+  <div class="training-section" id="trainingSection">
+    <div class="label" id="trainingLevel">训练模式</div>
+    <div class="detail" id="trainingDrill"></div>
+    <div>
+      <span class="stat" id="trainingConsecutive">连续: 0</span>
+      <span class="stat" id="trainingTotal">总尝试: 0</span>
+      <span class="stat" id="trainingSuccess">成功: 0</span>
+    </div>
+  </div>
 
-        ws.onmessage = (event) => {
-            const msg = JSON.parse(event.data);
+  <!-- Ball status grid -->
+  <div class="ball-section" id="ballSection" style="display:none;">
+    <div class="label">球状态 · 亮=台面 暗=已进袋</div>
+    <div class="ball-grid" id="ballGrid"></div>
+  </div>
+</div>
 
-            if (msg.type === 'score_update') {
-                const s = msg.score;
-                document.getElementById('score1').textContent = s.player1_score;
-                document.getElementById('score2').textContent = s.player2_score;
-                document.getElementById('player1').className =
-                    s.current_player === 1 ? 'player active' : 'player';
-                document.getElementById('player2').className =
-                    s.current_player === 2 ? 'player active' : 'player';
+<script>
+// ─── Realistic ball images via Canvas ────────────────────────────
+const ballDataURLs = {};
+(function() {
+  const colors = {
+    1:'#f6c445',2:'#1a4a9e',3:'#d32f2f',4:'#7b1fa2',
+    5:'#f57c00',6:'#388e3c',7:'#5d4037',
+    8:'#111111',
+    9:'#f6c445',10:'#1a4a9e',11:'#d32f2f',12:'#7b1fa2',
+    13:'#f57c00',14:'#388e3c',15:'#5d4037'
+  };
+  for (let n = 1; n <= 15; n++) {
+    const c = document.createElement('canvas');
+    c.width = 80; c.height = 80;
+    const ctx = c.getContext('2d');
+    const cx = 40, cy = 40, r = 36;
 
-                if (s.game_over) {
-                    document.getElementById('gameover').style.display = 'block';
-                    document.getElementById('gameover').textContent =
-                        '选手' + s.winner + ' 获胜！';
-                }
-                document.getElementById('status').textContent = '比赛进行中';
-                document.getElementById('status').className = 'status match';
-            }
+    const grd = ctx.createRadialGradient(cx, cy, r-2, cx, cy, r+4);
+    grd.addColorStop(0, 'rgba(255,255,255,0.1)'); grd.addColorStop(1, 'rgba(0,0,0,0.3)');
+    ctx.beginPath(); ctx.arc(cx, cy, r+4, 0, Math.PI*2);
+    ctx.fillStyle = grd; ctx.fill();
 
-            if (msg.type === 'table_state') {
-                document.getElementById('title').textContent = '台球AR投影系统 - 已连接';
-            }
-        };
+    if (n >= 9) {
+      ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2);
+      ctx.fillStyle = '#f5f0e8'; ctx.fill();
+      ctx.save();
+      ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2); ctx.clip();
+      ctx.fillStyle = colors[n];
+      ctx.fillRect(cx - r, cy - r*0.35, r*2, r*0.7);
+      ctx.restore();
+    } else {
+      ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2);
+      ctx.fillStyle = colors[n]; ctx.fill();
+    }
+    ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2);
+    ctx.strokeStyle = 'rgba(0,0,0,0.3)'; ctx.lineWidth = 1; ctx.stroke();
 
-        ws.onclose = () => {
-            document.getElementById('status').textContent = '连接断开，正在重连...';
-            document.getElementById('status').className = 'status idle';
-        };
+    const nr = 13;
+    ctx.beginPath(); ctx.arc(cx, cy, nr, 0, Math.PI*2);
+    ctx.fillStyle = '#fff'; ctx.fill();
+    ctx.strokeStyle = 'rgba(0,0,0,0.15)'; ctx.lineWidth = 1; ctx.stroke();
+    ctx.fillStyle = '#111'; ctx.font = 'bold 16px Arial';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(String(n), cx, cy + 0.5);
 
-        ws.onerror = () => {
-            document.getElementById('status').textContent = '连接错误';
-        };
-    </script>
+    const g2 = ctx.createRadialGradient(cx - r*0.3, cy - r*0.3, 2, cx - r*0.2, cy - r*0.2, r*0.7);
+    g2.addColorStop(0, 'rgba(255,255,255,0.5)'); g2.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2);
+    ctx.fillStyle = g2; ctx.fill();
+
+    ballDataURLs[n] = c.toDataURL();
+  }
+})();
+
+// ─── Ball number mapping ───────────────────────────────────────────
+// color + solid/stripe → ball number
+const SOLID_NUM = { yellow:1, blue:2, red:3, purple:4, orange:5, green:6, brown:7 };
+const STRIPE_NUM = { yellow:9, blue:10, red:11, purple:12, orange:13, green:14, brown:15 };
+
+function ballNumber(color, isSolid, isStripe) {
+  if (color === 'black') return 8;
+  if (isSolid) return SOLID_NUM[color] || 0;
+  if (isStripe) return STRIPE_NUM[color] || 0;
+  return SOLID_NUM[color] || 0;
+}
+
+function renderBallGrid(pocketedSet) {
+  const rows = [[1,2,3,4,5,6,7], [8], [9,10,11,12,13,14,15]];
+  return rows.map(row =>
+    '<div class="ball-row">' + row.map(n => {
+      const dim = pocketedSet.has(n) ? 'dim' : '';
+      return `<span class="ball-cell ${dim}"><img src="${ballDataURLs[n]}"></span>`;
+    }).join('') + '</div>'
+  ).join('');
+}
+
+// ─── WebSocket ────────────────────────────────────────────────────
+let ws = null;
+let reconnectTimer = null;
+let pocketedBalls = new Set();
+
+function connectWS() {
+  if (ws) try { ws.close(); } catch(e) {}
+
+  ws = new WebSocket(`ws://${location.hostname}:${location.port || 8000}/api/ws/phone`);
+
+  ws.onopen = () => {
+    document.getElementById('connectionDot').className = 'connected';
+    document.getElementById('status').textContent = '已连接';
+    document.getElementById('status').className = 'status match';
+  };
+
+  ws.onmessage = (event) => {
+    try {
+      const msg = JSON.parse(event.data);
+
+      if (msg.type === 'score_update') {
+        const s = msg.score;
+        document.getElementById('score1').textContent = s.player1_score;
+        document.getElementById('score2').textContent = s.player2_score;
+        document.getElementById('player1').className =
+          s.current_player === 1 ? 'player active' : 'player';
+        document.getElementById('player2').className =
+          s.current_player === 2 ? 'player active' : 'player';
+        // Ball type display
+        const p1g = s.player1_balls || '';
+        const p2g = s.player2_balls || '';
+        const p1rem = s.p1_remaining !== undefined ? s.p1_remaining : '';
+        const p2rem = s.p2_remaining !== undefined ? s.p2_remaining : '';
+        document.getElementById('balls1').textContent =
+          (p1g === 'solids' ? '纯色' : p1g === 'stripes' ? '花色' : '--') +
+          (p1rem !== '' ? ' 剩' + p1rem : '');
+        document.getElementById('balls2').textContent =
+          (p2g === 'solids' ? '纯色' : p2g === 'stripes' ? '花色' : '--') +
+          (p2rem !== '' ? ' 剩' + p2rem : '');
+        if (s.game_over) {
+          document.getElementById('gameover').style.display = 'block';
+          document.getElementById('gameover').textContent = '选手' + s.winner + ' 获胜！';
+        }
+        document.getElementById('status').textContent = '比赛进行中';
+        document.getElementById('status').className = 'status match';
+        // Hide training section when in match mode
+        document.getElementById('trainingSection').style.display = 'none';
+      }
+
+      if (msg.type === 'pocket_event') {
+        const d = msg.data;
+        // Use is_solid/is_stripe for unambiguous ball number
+        const num = ballNumber(d.color, d.is_solid, d.is_stripe);
+        if (d.is_cue) {
+          document.getElementById('status').textContent = '犯规！白球进袋';
+        } else if (num) {
+          document.getElementById('status').textContent = num + '号球进袋';
+          pocketedBalls.add(num);
+          const grid = document.getElementById('ballGrid');
+          const remaining = Math.max(0, 15 - pocketedBalls.size);
+          grid.innerHTML = renderBallGrid(pocketedBalls) +
+            '<div class="ball-summary">台面剩余 ' + remaining + ' 颗球</div>';
+          document.getElementById('ballSection').style.display = 'block';
+        }
+      }
+
+      if (msg.type === 'table_state') {
+        const titleEl = document.querySelector('.title');
+        if (titleEl) {
+          titleEl.innerHTML =
+            `<span id="connectionDot" class="connected"></span> 台球AR投影系统 - <span id="modeLabel">已连接</span>`;
+        }
+        if (msg.data && msg.data.balls && msg.data.balls.length > 0) {
+          document.getElementById('ballSection').style.display = 'block';
+          document.getElementById('ballGrid').innerHTML =
+            renderBallGrid(pocketedBalls) +
+            '<div class="ball-summary">台面 ' + msg.data.balls.length + ' 颗球</div>';
+        }
+      }
+
+      // Handle shot_result for training mode display
+      if (msg.type === 'shot_result') {
+        const d = msg.data;
+        const sec = document.getElementById('trainingSection');
+        sec.style.display = 'block';
+        document.getElementById('status').textContent = d.feedback || '击球完成';
+        document.getElementById('status').className = 'status training';
+        document.getElementById('trainingConsecutive').textContent =
+          '连续: ' + (d.consecutive_successes || 0);
+        document.getElementById('trainingTotal').textContent =
+          '总尝试: ' + (d.total_attempts || 0);
+        document.getElementById('trainingSuccess').textContent =
+          '成功: ' + (d.total_successes || 0);
+        document.getElementById('ballSection').style.display = 'none';
+      }
+
+      // Handle drill_info for training mode
+      if (msg.type === 'drill_info') {
+        const d = msg.data;
+        const sec = document.getElementById('trainingSection');
+        sec.style.display = 'block';
+        document.getElementById('modeLabel').textContent = '训练模式';
+        document.getElementById('status').textContent = '训练进行中';
+        document.getElementById('status').className = 'status training';
+        if (d.progress) {
+          const p = d.progress;
+          document.getElementById('trainingLevel').textContent =
+            p.level_name || ('第' + p.level + '档');
+          document.getElementById('trainingDrill').textContent =
+            '第' + p.drill + '/' + p.total_drills + '题';
+          document.getElementById('trainingConsecutive').textContent =
+            '连续: ' + (p.consecutive_successes || 0);
+          document.getElementById('trainingTotal').textContent =
+            '总尝试: ' + (p.total_attempts || 0);
+          document.getElementById('trainingSuccess').textContent =
+            '成功: ' + (p.total_successes || 0);
+        }
+        if (d.drill && d.drill.description) {
+          document.getElementById('trainingDrill').textContent +=
+            ' · ' + d.drill.description;
+        }
+        document.getElementById('ballSection').style.display = 'none';
+      }
+    } catch(e) { /* ignore parse errors */ }
+  };
+
+  ws.onclose = () => {
+    document.getElementById('connectionDot').className = 'disconnected';
+    document.getElementById('status').textContent = '连接断开，3秒后重连...';
+    document.getElementById('status').className = 'status idle';
+    if (reconnectTimer) clearTimeout(reconnectTimer);
+    reconnectTimer = setTimeout(connectWS, 3000);
+  };
+
+  ws.onerror = () => {
+    document.getElementById('status').textContent = '连接错误';
+  };
+}
+
+connectWS();
+</script>
 </body>
 </html>

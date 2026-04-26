@@ -1,0 +1,280 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#0d1b2a">
+
+    <LinearLayout
+        android:id="@+id/active_content"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <!-- Idle state (shown when no mode active) -->
+        <TextView
+            android:id="@+id/idle_text"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="请先在主页选择模式"
+            android:textColor="#888"
+            android:textSize="14sp"
+            android:gravity="center"
+            android:padding="40dp"
+            android:visibility="visible" />
+
+        <!-- ======== Match mode views ======== -->
+        <LinearLayout
+            android:id="@+id/match_view"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/match_title"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="🏆 比赛进行中"
+                android:textColor="#4fc3f7"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                android:layout_marginBottom="12dp" />
+
+            <LinearLayout
+                android:id="@+id/scoreboard"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center"
+                android:layout_marginBottom="12dp">
+
+                <LinearLayout
+                    android:id="@+id/player1_card"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:gravity="center"
+                    android:padding="12dp"
+                    android:background="@drawable/card_match"
+                    android:layout_marginRight="4dp">
+
+                    <TextView
+                        android:id="@+id/p1_name"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="选手一"
+                        android:textColor="#fff"
+                        android:textSize="14sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/p1_score"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="0"
+                        android:textColor="#fff"
+                        android:textSize="36sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/p1_balls"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="--"
+                        android:textColor="#888"
+                        android:textSize="11sp" />
+
+                    <TextView
+                        android:id="@+id/p1_turn"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text=""
+                        android:textColor="#4caf50"
+                        android:textSize="11sp"
+                        android:visibility="gone" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:id="@+id/player2_card"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:gravity="center"
+                    android:padding="12dp"
+                    android:background="#0a1628"
+                    android:layout_marginLeft="4dp">
+
+                    <TextView
+                        android:id="@+id/p2_name"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="选手二"
+                        android:textColor="#fff"
+                        android:textSize="14sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/p2_score"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="0"
+                        android:textColor="#fff"
+                        android:textSize="36sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/p2_balls"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="--"
+                        android:textColor="#888"
+                        android:textSize="11sp" />
+
+                    <TextView
+                        android:id="@+id/p2_turn"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text=""
+                        android:textColor="#4caf50"
+                        android:textSize="11sp"
+                        android:visibility="gone" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <Button
+                android:id="@+id/btn_switch_turn"
+                android:layout_width="match_parent"
+                android:layout_height="36dp"
+                android:text="🔄 交换击球"
+                android:textSize="12sp"
+                android:backgroundTint="#333"
+                android:layout_marginBottom="8dp" />
+
+            <TextView
+                android:id="@+id/match_events"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="等待进球..."
+                android:textColor="#888"
+                android:textSize="12sp"
+                android:padding="8dp"
+                android:background="#0a1628" />
+
+            <ImageView
+                android:id="@+id/table_view"
+                android:layout_width="match_parent"
+                android:layout_height="120dp"
+                android:scaleType="fitCenter"
+                android:visibility="gone"
+                android:background="#0a1628"
+                android:layout_marginTop="6dp" />
+        </LinearLayout>
+
+        <!-- ======== Training mode views ======== -->
+        <LinearLayout
+            android:id="@+id/training_view"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/training_title"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="🎯 训练模式"
+                android:textColor="#ff9800"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                android:layout_marginBottom="8dp" />
+
+            <TextView
+                android:id="@+id/drill_level"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text=""
+                android:textColor="#888"
+                android:textSize="13sp" />
+
+            <TextView
+                android:id="@+id/drill_progress"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text=""
+                android:textColor="#888"
+                android:textSize="12sp"
+                android:layout_marginBottom="10dp" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="12dp"
+                android:background="#0a1628"
+                android:layout_marginBottom="8dp">
+
+                <TextView
+                    android:id="@+id/drill_description"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text=""
+                    android:textColor="#ffb74d"
+                    android:textSize="13sp" />
+
+                <TextView
+                    android:id="@+id/drill_positions"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text=""
+                    android:textColor="#888"
+                    android:textSize="12sp"
+                    android:layout_marginTop="6dp" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/placement_status"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text=""
+                android:textColor="#81c784"
+                android:textSize="12sp"
+                android:layout_marginBottom="6dp" />
+
+            <TextView
+                android:id="@+id/shot_feedback"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text=""
+                android:textColor="#81c784"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:padding="16dp"
+                android:gravity="center"
+                android:background="#0d2a1e"
+                android:layout_marginBottom="4dp"
+                android:visibility="gone" />
+
+            <TextView
+                android:id="@+id/training_stats"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text=""
+                android:textColor="#888"
+                android:textSize="11sp"
+                android:layout_marginTop="2dp" />
+
+            <Button
+                android:id="@+id/btn_select_level"
+                android:layout_width="match_parent"
+                android:layout_height="36dp"
+                android:text="选择关卡"
+                android:textSize="12sp"
+                android:backgroundTint="#333"
+                android:layout_marginTop="8dp" />
+        </LinearLayout>
+
+    </LinearLayout>
+</ScrollView>

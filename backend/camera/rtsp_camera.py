@@ -60,7 +60,10 @@ class RtspCamera:
     def _capture_loop(self) -> None:
         while not self._stop_event.is_set():
             loop_start = time.time()
-            ret, frame = self._cap.read() if self._cap else (False, None)
+            # Local reference with lock to avoid TOCTOU race with stop()
+            with self._lock:
+                cap = self._cap
+            ret, frame = cap.read() if cap is not None else (False, None)
             with self._lock:
                 self._latest_frame = Frame(
                     data=frame if ret else None,
@@ -70,7 +73,15 @@ class RtspCamera:
             elapsed = time.time() - loop_start
             sleep_time = self._target_interval - elapsed
             if not ret:
-                logger.warning("RTSP read failed: %s", self._url)
-                time.sleep(1.0)  # backoff on failure
+                logger.warning("RTSP read failed, reconnecting: %s", self._url)
+                # Re-create VideoCapture to attempt reconnection
+                with self._lock:
+                    if self._cap:
+                        self._cap.release()
+                    try:
+                        self._cap = cv2.VideoCapture(self._url)
+                    except Exception:
+                        self._cap = None
+                time.sleep(2.0)  # backoff on failure
             elif sleep_time > 0:
                 time.sleep(sleep_time)
