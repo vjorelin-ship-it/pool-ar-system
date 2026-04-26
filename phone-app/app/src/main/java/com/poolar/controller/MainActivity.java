@@ -39,6 +39,22 @@ public class MainActivity extends AppCompatActivity {
                 Toast.makeText(this, "请输入IP地址", Toast.LENGTH_SHORT).show();
             }
         });
+
+        btnStart.setOnClickListener(v -> {
+            if (apiClient != null) apiClient.startSystem(callback("系统已启动"));
+        });
+        btnStop.setOnClickListener(v -> {
+            if (apiClient != null) apiClient.stopSystem(callback("系统已停止"));
+        });
+        btnMatch.setOnClickListener(v -> {
+            if (apiClient != null) apiClient.setMode("match", modeCallback("比赛模式已启动"));
+        });
+        btnTraining.setOnClickListener(v -> {
+            if (apiClient != null) apiClient.setMode("training", modeCallback("训练模式已启动"));
+        });
+        btnChallenge.setOnClickListener(v -> {
+            if (apiClient != null) apiClient.setMode("challenge", modeCallback("闯关模式已启动"));
+        });
     }
 
     private void startDiscovery() {
@@ -67,23 +83,6 @@ public class MainActivity extends AppCompatActivity {
             enableButtons(true);
         });
     }
-        btnStart.setOnClickListener(v -> {
-            if (apiClient != null) apiClient.startSystem(callback("系统已启动"));
-        });
-        btnStop.setOnClickListener(v -> {
-            if (apiClient != null) apiClient.stopSystem(callback("系统已停止"));
-        });
-        btnMatch.setOnClickListener(v -> {
-            if (apiClient != null) apiClient.setMode("match", modeCallback("比赛模式已启动"));
-        });
-        btnTraining.setOnClickListener(v -> {
-            if (apiClient != null) apiClient.setMode("training", modeCallback("训练模式已启动"));
-        });
-        btnChallenge.setOnClickListener(v -> {
-            if (apiClient != null) apiClient.setMode("challenge", modeCallback("闯关模式已启动"));
-        });
-    }
-
     private void enableButtons(boolean enabled) {
         btnStart.setEnabled(enabled);
         btnStop.setEnabled(enabled);
