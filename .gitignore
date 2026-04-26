@@ -1,0 +1,26 @@
+# Worktree
+.worktrees/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# Android
+phone-app/.gradle/
+phone-app/build/
+phone-app/app/build/
+projector-app/.gradle/
+projector-app/build/
+projector-app/app/build/
+phone-app/local.properties
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# System
+.superpowers/
