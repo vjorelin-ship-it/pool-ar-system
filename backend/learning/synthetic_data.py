@@ -102,9 +102,9 @@ class SyntheticDataGenerator:
 
         # Build components
         trajectory = self._build_perturbed_trajectory(
-            balls, target_idx, result, power, r,
+            balls, target_idx, result, power, r, physics=physics,
         )
-        events = self._build_events(target_idx, r)
+        events = self._build_events(trajectory, target_idx, pocket, r)
         physics_path = self._build_physics_path(result)
 
         # initial_balls: (16, 8) = [x, y, vx, vy, is_cue, is_black, is_solid, is_stripe]
@@ -154,7 +154,7 @@ class SyntheticDataGenerator:
         return positions
 
     def _build_perturbed_trajectory(
-        self, balls, target_idx, result, power, rng,
+        self, balls, target_idx, result, power, rng, physics=None,
     ) -> np.ndarray:
         """Build (16, F, 2) trajectory with randomised perturbations.
 
@@ -212,7 +212,8 @@ class SyntheticDataGenerator:
             else:
                 remain = F - t
                 decel_progress = remain / max(decel_frames, 1)
-                alpha = 1.0 - 0.5 * decel_progress * decel_progress
+                friction_factor = 1.0 + rng.uniform(-self.config.friction_noise, self.config.friction_noise)
+                alpha = 1.0 - 0.5 * decel_progress * decel_progress * friction_factor
 
             # Cue ball (index 0)
             nx = cue_start[0] + dx_n * alpha
@@ -246,16 +247,18 @@ class SyntheticDataGenerator:
                 traj[i, t, 0] = traj[i, t - 1, 0]
                 traj[i, t, 1] = traj[i, t - 1, 1]
 
+        # cushion_noise and pocket_noise used by trainer (Task 4)
+
         return traj
 
-    def _build_events(self, target_idx, rng) -> np.ndarray:
+    def _build_events(self, traj, target_idx, pocket, rng) -> np.ndarray:
         """Build (F, 4) one-hot event sequence.
 
         Events: [none, collision, pocket, stop].
         Frames are assigned randomised but plausible event boundaries.
         Each frame is strictly one-hot.
         """
-        F = self.config.num_frames
+        F = traj.shape[1]  # use actual trajectory length
         events = np.zeros((F, 4), dtype=np.float32)
         events[:, 0] = 1.0  # default: all "none"
 
@@ -312,14 +315,14 @@ class SyntheticDataGenerator:
 
         traj = torch.zeros(N, 16, F, 2)
         init_balls = torch.zeros(N, 16, 8)
-        events = torch.zeros(N, F, dtype=torch.long)
+        events = torch.zeros(N, self.config.num_frames, 4)
         shot_params = torch.zeros(N, 3)
         phys_path = torch.zeros(N, 2, 8, 2)
 
         for i, s in enumerate(samples):
             traj[i] = torch.from_numpy(s["trajectory"])
             init_balls[i] = torch.from_numpy(s["initial_balls"])
-            events[i] = torch.from_numpy(s["events"]).argmax(dim=-1)
+            events[i] = torch.from_numpy(s["events"])
             shot_params[i] = torch.from_numpy(s["shot_params"])
             phys_path[i] = torch.from_numpy(s["physics_path"])
 
