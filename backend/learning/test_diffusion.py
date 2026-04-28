@@ -106,3 +106,134 @@ def test_condition_encoder_no_physics():
         None,
     )
     assert cond.shape == (1, 32, 512)
+
+
+# ======================================================================
+# Task 3: Denoising U-Net tests
+# ======================================================================
+
+def test_unet_forward_shape():
+    """TrajectoryUNet outputs noise predictions with the same shape as input."""
+    import torch
+    from learning.diffusion_unet import TrajectoryUNet
+
+    B, N_BALLS, N_FRAMES, COORD = 2, 16, 300, 2
+    unet = TrajectoryUNet(
+        n_balls=N_BALLS, n_frames=N_FRAMES, coord_dim=COORD,
+        condition_dim=512, spatial_tokens=32,
+    )
+    x = torch.randn(B, N_BALLS, N_FRAMES, COORD)
+    t = torch.randint(0, 1000, (B,))
+    condition = torch.randn(B, 32, 512)
+    out = unet(x, t, condition)
+    assert out.shape == x.shape, f"Expected {x.shape}, got {out.shape}"
+
+
+def test_unet_denoising_behavior():
+    """UNet output is non-zero and differs from the noisy input."""
+    import torch
+    from learning.diffusion_unet import TrajectoryUNet
+
+    unet = TrajectoryUNet(n_balls=16, n_frames=300)
+    unet.train()
+    x_noisy = torch.randn(1, 16, 300, 2)
+    t = torch.tensor([500], dtype=torch.long)
+    cond = torch.randn(1, 32, 512)
+    out = unet(x_noisy, t, cond)
+    assert out.abs().sum() > 0.01, "Output should be non-trivial"
+    assert not torch.allclose(out, x_noisy, atol=1e-3), \
+        "UNet should predict noise different from the input"
+
+
+def test_unet_subcomponents():
+    """Verify each building block runs without error."""
+    import torch
+    from learning.diffusion_unet import (
+        TimeEmbed, ResBlock1D, SelfAttention1D,
+        CrossAttention1D, DownBlock, UpBlock, Bottleneck,
+    )
+
+    B, ch, L, time_dim, cond_dim, N = 2, 64, 100, 256, 512, 16
+    device = torch.device("cpu")
+
+    # --- TimeEmbed ---
+    te = TimeEmbed(dim=time_dim).to(device)
+    t = torch.randint(0, 1000, (B,), device=device)
+    t_emb = te(t)
+    assert t_emb.shape == (B, time_dim), f"TimeEmbed: {t_emb.shape}"
+
+    # --- ResBlock1D ---
+    rb = ResBlock1D(ch, time_dim).to(device)
+    x = torch.randn(B, ch, L, device=device)
+    y = rb(x, t_emb)
+    assert y.shape == x.shape, f"ResBlock1D: {y.shape}"
+
+    # --- SelfAttention1D ---
+    sa = SelfAttention1D(ch, n_heads=8).to(device)
+    y = sa(x)
+    assert y.shape == x.shape, f"SelfAttention1D: {y.shape}"
+
+    # --- CrossAttention1D ---
+    ca = CrossAttention1D(ch, cond_dim, n_heads=8).to(device)
+    x_flat = torch.randn(B * N, ch, L, device=device)
+    cond = torch.randn(B, 32, cond_dim, device=device)
+    y = ca(x_flat, cond, n_balls=N)
+    assert y.shape == x_flat.shape, f"CrossAttention1D: {y.shape}"
+
+    # --- DownBlock ---
+    db = DownBlock(ch, ch * 2, time_dim, cond_dim, has_cross=True).to(device)
+    x = torch.randn(B * N, ch, L, device=device)
+    t_emb_expanded = t_emb.repeat_interleave(N, dim=0)  # (B*N, time_dim)
+    y, skip = db(x, t_emb_expanded, cond, N)
+    expected_out_len = (L - 1) // 2 + 1  # Conv1d stride=2, k=3, p=1
+    assert y.shape == (B * N, ch * 2, expected_out_len), f"DownBlock out: {y.shape}"
+    assert skip.shape == x.shape, f"DownBlock skip: {skip.shape}"
+
+    # --- UpBlock ---
+    ub = UpBlock(ch * 2, ch, ch, time_dim, cond_dim, has_cross=True).to(device)
+    y_up = ub(y, skip, t_emb_expanded, cond, N)
+    assert y_up.shape == skip.shape, f"UpBlock: {y_up.shape}"
+
+    # --- Bottleneck ---
+    bn = Bottleneck(ch * 2, time_dim, cond_dim).to(device)
+    y_bn = bn(y, t_emb_expanded, cond, N)
+    assert y_bn.shape == y.shape, f"Bottleneck: {y_bn.shape}"
+
+
+def test_unet_odd_length():
+    """UNet handles odd-length trajectories (e.g. 299 frames)."""
+    import torch
+    from learning.diffusion_unet import TrajectoryUNet
+
+    unet = TrajectoryUNet(n_balls=16, n_frames=299)
+    x = torch.randn(1, 16, 299, 2)
+    t = torch.tensor([100], dtype=torch.long)
+    cond = torch.randn(1, 32, 512)
+    out = unet(x, t, cond)
+    assert out.shape == x.shape, f"Odd-length: expected {x.shape}, got {out.shape}"
+
+
+def test_unet_gradient_flow():
+    """Gradients flow through all parameters of the U-Net."""
+    import torch
+    from learning.diffusion_unet import TrajectoryUNet
+
+    unet = TrajectoryUNet(n_balls=16, n_frames=100)  # shorter for speed
+    x = torch.randn(1, 16, 100, 2, requires_grad=False)
+    t = torch.tensor([500], dtype=torch.long)
+    cond = torch.randn(1, 32, 512, requires_grad=False)
+
+    out = unet(x, t, cond)
+    loss = out.mean()
+    loss.backward()
+
+    grads = 0
+    nograds = 0
+    for name, p in unet.named_parameters():
+        if p.grad is not None and p.grad.abs().sum() > 0:
+            grads += 1
+        else:
+            nograds += 1
+
+    assert grads > 0, f"No parameters received gradients"
+    assert nograds == 0, f"{nograds} parameters have zero/null gradient"
