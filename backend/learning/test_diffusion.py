@@ -1,5 +1,6 @@
-"""Tests for synthetic trajectory generation (Task 1: Synthetic Data Generator)."""
+"""Tests for the diffusion trajectory model pipeline (Tasks 1-4)."""
 
+import os
 import numpy as np
 
 
@@ -237,3 +238,225 @@ def test_unet_gradient_flow():
 
     assert grads > 0, f"No parameters received gradients"
     assert nograds == 0, f"{nograds} parameters have zero/null gradient"
+
+
+# ======================================================================
+# Task 4: Diffusion Trainer + Output Heads tests
+# ======================================================================
+
+def test_trajectory_heads_output_shapes():
+    """TrajectoryHeads produce correct output shapes."""
+    import torch
+    from learning.diffusion_trainer import TrajectoryHeads
+
+    heads = TrajectoryHeads(coord_dim=2, base_ch=64)
+    # Simulated U-Net features: (B*N, base_ch, n_frames)
+    B_times_N = 32  # e.g. B=2, N=16
+    feats = torch.randn(B_times_N, 64, 100)
+    outputs = heads(feats)
+
+    assert outputs["positions"].shape == (B_times_N, 2, 100), \
+        f"positions shape: {outputs['positions'].shape}"
+    assert outputs["velocities"].shape == (B_times_N, 2, 100), \
+        f"velocities shape: {outputs['velocities'].shape}"
+    assert outputs["events"].shape == (B_times_N, 4, 100), \
+        f"events shape: {outputs['events'].shape}"
+
+
+def test_noise_schedules():
+    """Cosine and linear schedules produce valid betas."""
+    import torch
+    from learning.diffusion_trainer import cosine_beta_schedule, linear_beta_schedule
+
+    for ts in [10, 100, 1000]:
+        betas = cosine_beta_schedule(timesteps=ts)
+        assert betas.shape == (ts,), f"cosine shape mismatch for {ts}"
+        assert (betas >= 0).all(), "cosine betas must be >= 0"
+        assert (betas < 1).all(), "cosine betas must be < 1"
+        assert torch.isfinite(betas).all(), "cosine betas contain inf/nan"
+
+        betas = linear_beta_schedule(timesteps=ts)
+        assert betas.shape == (ts,), f"linear shape mismatch for {ts}"
+        assert (betas >= 0).all(), "linear betas must be >= 0"
+        assert (betas < 1).all(), "linear betas must be < 1"
+        assert torch.isfinite(betas).all(), "linear betas contain inf/nan"
+
+
+def test_noise_addition_statistics():
+    """add_noise produces xt with expected variance."""
+    import torch
+    from learning.diffusion_unet import TrajectoryUNet
+    from learning.diffusion_condition import ConditionEncoder
+    from learning.diffusion_trainer import (
+        DiffusionTrainer, TrajectoryHeads,
+    )
+
+    heads = TrajectoryHeads(coord_dim=2, base_ch=64)
+    unet = TrajectoryUNet(n_balls=16, n_frames=100)
+    encoder = ConditionEncoder()
+    trainer = DiffusionTrainer(
+        unet=unet, heads=heads, condition_encoder=encoder,
+        n_frames=100, timesteps=1000,
+    )
+
+    x0 = torch.randn(4, 16, 100, 2)
+
+    # At t=0, xt should be very close to x0 (only beta[0] noise added)
+    t0 = torch.zeros(4, dtype=torch.long)
+    xt0, noise0 = trainer.add_noise(x0, t0)
+    # With cosine schedule, beta[0] is very small and
+    # sqrt(alpha_cumprod[0]) ≈ 0.99995, so the diff is tiny.
+    diff_frac = (xt0 - x0).abs().max() / x0.abs().max()
+    assert diff_frac < 0.05, \
+        f"at t=0, xt should be very close to x0. max diff frac: {diff_frac:.6f}"
+
+    # At t=999 (near end), xt should be almost pure noise
+    t999 = torch.full((4,), 999, dtype=torch.long)
+    xt999, noise999 = trainer.add_noise(x0, t999)
+    # The variance of xt should be close to 1
+    xt999_std = xt999.std().item()
+    assert 0.5 < xt999_std < 2.0, \
+        f"xt at t=999 should be nearly pure noise (std={xt999_std:.4f})"
+
+
+def test_training_loss_decreases():
+    """Training steps should reduce loss (compare initial vs final average)."""
+    import torch
+    from learning.diffusion_unet import TrajectoryUNet
+    from learning.diffusion_condition import ConditionEncoder
+    from learning.diffusion_trainer import DiffusionTrainer, TrajectoryHeads
+
+    heads = TrajectoryHeads(coord_dim=2, base_ch=64)
+    unet = TrajectoryUNet(n_balls=16, n_frames=100)
+    encoder = ConditionEncoder()
+    trainer = DiffusionTrainer(
+        unet=unet, heads=heads, condition_encoder=encoder,
+        n_frames=100, lr=1e-3,
+    )
+
+    batch = {
+        "trajectory": torch.randn(2, 16, 100, 2),
+        "initial_balls": torch.randn(2, 16, 8),
+        "events": torch.randint(0, 4, (2, 100)),
+        "shot_params": torch.randn(2, 3),
+        "physics_path": torch.randn(2, 2, 8, 2),
+    }
+    table = torch.randn(2, 3, 600, 1200)
+
+    losses = []
+    for _ in range(30):
+        loss_dict = trainer.train_step(batch, table)
+        losses.append(loss_dict["total"])
+
+    # Average of first 5 vs average of last 5 should show improvement
+    first_avg = sum(losses[:5]) / 5
+    last_avg = sum(losses[-5:]) / 5
+    assert last_avg <= first_avg, \
+        f"Loss should decrease (first5_avg={first_avg:.4f}, last5_avg={last_avg:.4f})"
+
+
+def test_train_step_loss_keys():
+    """train_step returns all expected loss keys."""
+    import torch
+    from learning.diffusion_unet import TrajectoryUNet
+    from learning.diffusion_condition import ConditionEncoder
+    from learning.diffusion_trainer import DiffusionTrainer, TrajectoryHeads
+
+    heads = TrajectoryHeads(coord_dim=2, base_ch=64)
+    unet = TrajectoryUNet(n_balls=16, n_frames=100)
+    encoder = ConditionEncoder()
+    trainer = DiffusionTrainer(
+        unet=unet, heads=heads, condition_encoder=encoder,
+        n_frames=100, timesteps=100, lr=1e-3,
+    )
+
+    batch = {
+        "trajectory": torch.randn(2, 16, 100, 2),
+        "initial_balls": torch.randn(2, 16, 8),
+        "events": torch.randint(0, 4, (2, 100)),
+        "shot_params": torch.randn(2, 3),
+        "physics_path": torch.randn(2, 2, 8, 2),
+    }
+    table = torch.randn(2, 3, 600, 1200)
+
+    loss_dict = trainer.train_step(batch, table)
+    for key in ("total", "diffusion", "event", "smooth"):
+        assert key in loss_dict, f"Missing loss key: {key}"
+        assert isinstance(loss_dict[key], float), \
+            f"{key} should be float, got {type(loss_dict[key])}"
+
+
+def test_checkpoint_save_load():
+    """Checkpoint roundtrip preserves weights."""
+    import torch
+    from learning.diffusion_unet import TrajectoryUNet
+    from learning.diffusion_condition import ConditionEncoder
+    from learning.diffusion_trainer import (
+        TrajectoryHeads, save_checkpoint, load_checkpoint,
+    )
+
+    unet = TrajectoryUNet(n_balls=16, n_frames=100)
+    heads = TrajectoryHeads(base_ch=64)
+    encoder = ConditionEncoder()
+
+    path = os.path.join(os.path.dirname(__file__), "_test_ckpt.pt")
+    try:
+        save_checkpoint(path, unet, heads, encoder, epoch=5, loss=0.123)
+
+        # Fresh models
+        unet2 = TrajectoryUNet(n_balls=16, n_frames=100)
+        heads2 = TrajectoryHeads(base_ch=64)
+        encoder2 = ConditionEncoder()
+        state = load_checkpoint(path, unet2, heads2, encoder2)
+
+        assert state["epoch"] == 5
+        assert abs(state["loss"] - 0.123) < 0.001
+
+        # Verify weights were actually restored (compare with original)
+        for (n1, p1), (n2, p2) in zip(
+            unet.named_parameters(), unet2.named_parameters(),
+        ):
+            assert torch.allclose(p1, p2, atol=1e-6), \
+                f"UNet param {n1} differs after load"
+        for (n1, p1), (n2, p2) in zip(
+            heads.named_parameters(), heads2.named_parameters(),
+        ):
+            assert torch.allclose(p1, p2, atol=1e-6), \
+                f"Heads param {n1} differs after load"
+        for (n1, p1), (n2, p2) in zip(
+            encoder.named_parameters(), encoder2.named_parameters(),
+        ):
+            assert torch.allclose(p1, p2, atol=1e-6), \
+                f"Encoder param {n1} differs after load"
+
+    finally:
+        if os.path.exists(path):
+            os.remove(path)
+
+
+def test_trainer_to_device():
+    """DiffusionTrainer.to(device) moves models correctly."""
+    import torch
+    from learning.diffusion_unet import TrajectoryUNet
+    from learning.diffusion_condition import ConditionEncoder
+    from learning.diffusion_trainer import DiffusionTrainer, TrajectoryHeads
+
+    heads = TrajectoryHeads(coord_dim=2, base_ch=64)
+    unet = TrajectoryUNet(n_balls=16, n_frames=100)
+    encoder = ConditionEncoder()
+    trainer = DiffusionTrainer(
+        unet=unet, heads=heads, condition_encoder=encoder,
+        n_frames=100,
+    )
+
+    # After construction, everything should be on the same device
+    # Check one parameter from each model
+    unet_param_device = next(unet.parameters()).device
+    heads_param_device = next(heads.parameters()).device
+    encoder_param_device = next(encoder.parameters()).device
+
+    assert unet_param_device == heads_param_device == encoder_param_device, \
+        f"Devices differ: unet={unet_param_device}, heads={heads_param_device}, encoder={encoder_param_device}"
+
+    # Schedule buffers should be on the same device
+    assert trainer.alphas_cumprod.device == unet_param_device

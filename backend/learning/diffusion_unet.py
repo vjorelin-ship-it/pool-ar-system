@@ -392,15 +392,19 @@ class TrajectoryUNet(nn.Module):
         x: torch.Tensor,
         t: torch.Tensor,
         condition: torch.Tensor,
-    ) -> torch.Tensor:
+        return_features: bool = False,
+    ) -> torch.Tensor | tuple[torch.Tensor, torch.Tensor]:
         """
         Args:
             x:         (B, N_balls, N_frames, coord_dim)  noisy trajectory
             t:         (B,)                                timestep indices
             condition: (B, spatial_tokens, condition_dim)  conditioning
+            return_features: if True, also return the features before
+                             output_conv (B*N, base_ch, n_frames).
 
         Returns:
             predicted noise: (B, N_balls, N_frames, coord_dim)
+            (features, noise_pred) if return_features is True
         """
         B, N, L, C = x.shape
         assert N == self.n_balls, f"Expected {self.n_balls} balls, got {N}"
@@ -432,9 +436,12 @@ class TrajectoryUNet(nn.Module):
             h = up(h, skip, t_emb, condition, N)
 
         # ---- Output convolution ----
+        features = h  # (B*N, base_ch, L)  saved before final conv
         h = self.output_conv(h)  # (B*N, coord_dim, L)
 
         # ---- Reshape back ----
         h = h.reshape(B, N, L, C)
 
+        if return_features:
+            return h, features
         return h
