@@ -268,7 +268,10 @@ class DiffusionTrainer:
         # ---- 1. Move data to device ----
         x0 = batch["trajectory"].to(self.device)            # (B, N, L, C)
         initial_balls = batch["initial_balls"].to(self.device)
-        events_gt = batch["events"].to(self.device)          # (B, L) int64
+        events_gt = batch["events"].to(self.device)          # (B, L) int64 or (B, L, 4) one-hot
+        # If events are one-hot (B, L, 4), convert to class indices (B, L)
+        if events_gt.dim() == 3 and events_gt.shape[-1] == 4:
+            events_gt = events_gt.argmax(dim=-1)
         shot_params = batch["shot_params"].to(self.device)
         physics_path = batch["physics_path"].to(self.device)
         table = table_image.to(self.device)
