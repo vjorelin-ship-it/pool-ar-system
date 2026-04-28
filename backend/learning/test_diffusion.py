@@ -73,3 +73,36 @@ def test_trajectory_perturbation():
     ).sum()
     assert pos_diff > 1e-6, \
         f"Ball positions should differ. diff={pos_diff:.8f}"
+
+
+# ======================================================================
+# Task 2: Condition Encoder tests
+# ======================================================================
+
+def test_condition_encoder_output_shape():
+    """ConditionEncoder produces (B, spatial_tokens, condition_dim)."""
+    import torch
+    from learning.diffusion_condition import ConditionEncoder
+
+    encoder = ConditionEncoder(condition_dim=512, spatial_tokens=32)
+    table = torch.randn(1, 3, 600, 1200)
+    balls = torch.randn(1, 16, 8)
+    shot = torch.randn(1, 3)
+    phys = torch.randn(1, 2, 8, 2)
+    cond = encoder(table, balls, shot, phys)
+    assert cond.shape == (1, 32, 512), f"Expected (1,32,512), got {cond.shape}"
+
+
+def test_condition_encoder_no_physics():
+    """ConditionEncoder works with physics_path=None."""
+    import torch
+    from learning.diffusion_condition import ConditionEncoder
+
+    encoder = ConditionEncoder()
+    cond = encoder(
+        torch.randn(1, 3, 600, 1200),
+        torch.randn(1, 16, 8),
+        torch.randn(1, 3),
+        None,
+    )
+    assert cond.shape == (1, 32, 512)
