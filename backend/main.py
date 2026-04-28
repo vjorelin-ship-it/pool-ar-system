@@ -32,6 +32,8 @@ from vision.speed_detector import SpeedDetector
 from learning.data_collector import DataCollector, ShotRecord
 from learning.physics_adapter import PhysicsAdapter
 from learning.correction_model import CorrectionModel
+from learning.diffusion_model import DiffusionTrajectoryModel
+from learning.trajectory_collector import TrajectoryCollector
 
 
 class PoolARSystem:
@@ -49,6 +51,10 @@ class PoolARSystem:
         self.data_collector = DataCollector()
         self.physics_adapter = PhysicsAdapter()
         self.correction_model = CorrectionModel()
+        # Diffusion trajectory model
+        self.trajectory_model = DiffusionTrajectoryModel()
+        self.trajectory_collector = TrajectoryCollector()
+        self._use_ai_trajectory = False  # enabled when model loads successfully
         self._running = False
         self._vision_thread: Optional[threading.Thread] = None
         self._loop: Optional[asyncio.AbstractEventLoop] = None
@@ -58,6 +64,13 @@ class PoolARSystem:
         self.physics_adapter.load()
         self.data_collector.load()
         self.correction_model.load()
+        # Load diffusion model if available
+        if self.trajectory_model.load():
+            self._use_ai_trajectory = True
+            print(f"[Model] Diffusion trajectory model loaded "
+                  f"({self.trajectory_model.get_param_count():,} params)")
+        else:
+            print("[Model] No diffusion model found, using physics engine")
 
     def set_loop(self, loop: asyncio.AbstractEventLoop) -> None:
         self._loop = loop
@@ -95,6 +108,7 @@ class PoolARSystem:
         self._vision_thread = threading.Thread(
             target=self._vision_loop, daemon=True)
         self._vision_thread.start()
+        system_state["main_system"] = self
         print(f"[System] Started ({self.data_collector.count()} prior shots loaded)")
         phy = self.physics_adapter.get_adjusted_params()
         print(f"[System] Physics params: cushion={phy.cushion_restitution:.3f}, "
@@ -107,6 +121,8 @@ class PoolARSystem:
 
     def stop(self) -> None:
         self._running = False
+        if self.trajectory_collector.is_collecting:
+            self.trajectory_collector.stop()
         if self.camera:
             self.camera.stop()
         self.correction_model.save()
@@ -337,6 +353,83 @@ class PoolARSystem:
         if not cue_ball or not targets:
             return self.renderer.render_to_base64()
 
+        # Try AI trajectory prediction first
+        if self._use_ai_trajectory and self.trajectory_model.is_trained():
+            try:
+                import numpy as np
+                # Build initial ball states
+                initial_balls = np.zeros((16, 8), dtype=np.float32)
+                for i, b in enumerate(balls[:16]):
+                    initial_balls[i, 0] = float(b.x)
+                    initial_balls[i, 1] = float(b.y)
+                    initial_balls[i, 4] = 1.0 if b.is_cue else 0.0
+                    initial_balls[i, 5] = 1.0 if b.is_black else 0.0
+                    initial_balls[i, 6] = 1.0 if b.is_solid else 0.0
+                    initial_balls[i, 7] = 1.0 if b.is_stripe else 0.0
+
+                shot_params = np.array([0.5, 0.0, 0.0], dtype=np.float32)
+                speed_val = system_state["table_state"].get("last_cue_speed", 0)
+                if speed_val > 0:
+                    shot_params[0] = min(1.0, speed_val / 5.0)
+
+                # Physics path as condition
+                physics_path = None
+                if targets:
+                    cue_vec = Vec2(cue_ball.x, cue_ball.y)
+                    t = targets[0]
+                    phys_result = self.physics.find_best_shot(cue_vec, Vec2(t.x, t.y))
+                    if phys_result.success:
+                        physics_path = np.zeros((2, 8, 2), dtype=np.float32)
+                        for j, p in enumerate(phys_result.cue_path[:8]):
+                            physics_path[0, j] = [p.x, p.y]
+                        for j, p in enumerate(phys_result.target_path[:8]):
+                            physics_path[1, j] = [p.x, p.y]
+
+                # Predict
+                trajectory = self.trajectory_model.predict(
+                    np.zeros((600, 1200, 3), dtype=np.uint8),
+                    initial_balls, shot_params, physics_path,
+                    condition_physics=True,
+                )
+
+                # Extract paths
+                target_idx = 0
+                for i, b in enumerate(balls[:16]):
+                    if not b.is_cue:
+                        target_idx = i
+                        break
+
+                cue_path = [(float(trajectory[0, f, 0]), float(trajectory[0, f, 1]))
+                            for f in range(300)
+                            if trajectory[0, f, 0] != 0 or trajectory[0, f, 1] != 0]
+                tgt_path = [(float(trajectory[target_idx, f, 0]),
+                              float(trajectory[target_idx, f, 1]))
+                             for f in range(300)
+                             if trajectory[target_idx, f, 0] != 0 or
+                             trajectory[target_idx, f, 1] != 0]
+
+                if not cue_path:
+                    cue_path = [(cue_ball.x, cue_ball.y)]
+                if not tgt_path:
+                    tgt_path = [(targets[0].x, targets[0].y)]
+
+                cue_final = cue_path[-1] if cue_path else None
+                t = targets[0]
+                overlay = ProjectionOverlay(
+                    cue_path=cue_path,
+                    target_path=tgt_path,
+                    pocket=(tgt_path[-1][0], tgt_path[-1][1]) if tgt_path else (0.5, 0.5),
+                    target_pos=(t.x, t.y),
+                    cue_pos=(cue_ball.x, cue_ball.y),
+                    cue_final_pos=cue_final,
+                    label=f"AI: {t.color}",
+                )
+                return self.renderer.render_to_base64(overlay)
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
+                # Fall through to physics engine
+
         # Physics: find best shot for each target
         cue_vec = Vec2(cue_ball.x, cue_ball.y)
         best_overlay = None
@@ -499,6 +592,10 @@ class PoolARSystem:
                             system_state["table_state"]["last_cue_speed"] = cue_speed
                             # Record speed in data collector for last shot
                             print(f"[Speed] Cue speed: {cue_speed} m/s")
+
+                        # Feed trajectory collector (silent background)
+                        if self.trajectory_collector.is_collecting and balls is not None:
+                            self.trajectory_collector.feed_frame(balls)
 
                         # Update system state
                         system_state["table_state"]["detected"] = True
