@@ -166,6 +166,18 @@ class ConnectionManager:
             except Exception:
                 self._phone_clients.discard(ws)
 
+    async def broadcast_model_status(self, status: dict) -> None:
+        """Send model training status to phone clients."""
+        data = json.dumps({
+            "type": "model_status",
+            "data": status,
+        })
+        for ws in list(self._phone_clients):
+            try:
+                await ws.send_text(data)
+            except Exception:
+                pass
+
     async def broadcast_drill_info(self, info: dict) -> None:
         """Send current drill info to phone clients."""
         data = json.dumps({
