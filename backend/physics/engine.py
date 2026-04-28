@@ -221,6 +221,74 @@ class PhysicsEngine:
 
         return best or self._no_shot()
 
+    # ─── 轨迹生成 ─────────────────────────────────────────────────
+
+    def generate_trajectory_frames(self, cue_pos: Vec2, target_pos: Vec2,
+                                    pocket_pos: Vec2, num_frames: int = 100,
+                                    power: float = 0.5,
+                                    spin_x: float = 0.0,
+                                    spin_y: float = 0.0,
+                                    ) -> Tuple[List[Tuple[float, float]],
+                                               List[Tuple[float, float]]]:
+        """Generate simulated trajectory frame sequence.
+
+        Used for synthetic data generation and physics-guided conditioning.
+
+        Returns:
+            cue_path: list of (x, y) positions, length=num_frames
+            target_path: list of (x, y) positions, length=num_frames
+        """
+        shot = self.calculate_shot(cue_pos, target_pos, pocket_pos)
+        if not shot.success:
+            shot = self.calculate_bank_shot(cue_pos, target_pos, pocket_pos)
+        if not shot.success:
+            # Fallback: simple straight-line motion
+            return ([(cue_pos.x + (target_pos.x - cue_pos.x) * i / num_frames,
+                      cue_pos.y + (target_pos.y - cue_pos.y) * i / num_frames)
+                     for i in range(num_frames)],
+                    [(target_pos.x, target_pos.y) for _ in range(num_frames)])
+
+        # Extract physics path points
+        cue_pts = [(p.x, p.y) for p in shot.cue_path]
+        target_pts = [(p.x, p.y) for p in shot.target_path]
+        cue_final = (shot.cue_final_pos.x, shot.cue_final_pos.y)             if shot.cue_final_pos else cue_pts[-1]
+        target_final = target_pts[-1] if len(target_pts) > 1 else target_pts[0]
+
+        # Phases: 0-15% approach, 15-80% motion+deceleration, 80-100% stopped
+        collide_frac = 0.15
+        stop_frac = 0.80
+        n_collide = max(1, int(num_frames * collide_frac))
+        n_stop = min(num_frames, int(num_frames * stop_frac))
+
+        # Cue ball path
+        cue_frames = []
+        for i in range(num_frames):
+            if i <= n_collide:
+                alpha = i / n_collide
+                cx = cue_pts[0][0] + (cue_pts[-1][0] - cue_pts[0][0]) * alpha
+                cy = cue_pts[0][1] + (cue_pts[-1][1] - cue_pts[0][1]) * alpha
+            elif i <= n_stop:
+                alpha = (i - n_collide) / (n_stop - n_collide)
+                decel = 1.0 - alpha * alpha * 0.7
+                cx = cue_pts[-1][0] + (cue_final[0] - cue_pts[-1][0]) * (1 - decel)
+                cy = cue_pts[-1][1] + (cue_final[1] - cue_pts[-1][1]) * (1 - decel)
+            else:
+                cx, cy = cue_final
+            cue_frames.append((cx, cy))
+
+        # Target ball path
+        target_frames = []
+        for i in range(num_frames):
+            if i < n_collide:
+                tx, ty = target_pts[0]
+            else:
+                alpha = min(1.0, (i - n_collide) / max(n_stop - n_collide, 1))
+                tx = target_pts[0][0] + (target_final[0] - target_pts[0][0]) * alpha
+                ty = target_pts[0][1] + (target_final[1] - target_pts[0][1]) * alpha
+            target_frames.append((tx, ty))
+
+        return cue_frames, target_frames
+
     # ─── 内部方法 ─────────────────────────────────────────────────
 
     def _will_hit_target(self, cue_pos: Vec2, aim_point: Vec2,
