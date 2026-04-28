@@ -342,6 +342,32 @@ class DiffusionTrainer:
             "smooth": L_smooth.item(),
         }
 
+    # ------------------------------------------------------------------
+    # Training epoch
+    # ------------------------------------------------------------------
+
+    def train_epoch(self, dataloader, table_fn=None) -> Dict[str, float]:
+        """Train one epoch, return averaged losses."""
+        self.unet.train()
+        self.heads.train()
+        self.condition_encoder.train()
+
+        total_losses = {"total": 0.0, "diffusion": 0.0, "event": 0.0, "smooth": 0.0}
+        n_batches = 0
+
+        for batch in dataloader:
+            if table_fn is not None:
+                table = table_fn(batch)
+            else:
+                table = torch.zeros(len(batch["trajectory"]), 3, 600, 1200, device=self.device)
+            losses = self.train_step(batch, table)
+            for k in total_losses:
+                total_losses[k] += losses[k].item()
+            n_batches += 1
+
+        self.scheduler.step()
+        return {k: v / max(n_batches, 1) for k, v in total_losses.items()}
+
 
 # ==========================================================================
 # 4. Checkpoint utilities
