@@ -303,8 +303,12 @@ class SyntheticDataGenerator:
     def to_tensors(self, samples: List[Dict]) -> Dict[str, 'torch.Tensor']:
         """Convert a list of sample dicts into batched training tensors.
 
-        Events are converted from one-hot (300, 4) to class indices (300,)
-        for efficient storage and cross-entropy loss compatibility.
+        Returns a dict with tensors:
+          - trajectory:     (N, 16, F, 2)
+          - initial_balls:  (N, 16, 8)
+          - events:         (N, F, 4)  one-hot preserved
+          - shot_params:    (N, 3)
+          - physics_path:   (N, 2, 8, 2)
         """
         if not HAS_TORCH:
             raise RuntimeError("PyTorch is required for to_tensors()")
