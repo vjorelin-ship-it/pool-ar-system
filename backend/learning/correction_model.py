@@ -120,14 +120,24 @@ class CorrectionModel:
 
         best_val_loss = float("inf")
         best_state = None
+        batch_size = 64
 
         for epoch in range(epochs):
             self._model.train()
-            optimizer.zero_grad()
-            pred = self._model(X_train)
-            loss = F.mse_loss(pred, y_train)
-            loss.backward()
-            optimizer.step()
+            # Mini-batch training
+            batches = train_set.get_training_batches(batch_size)
+            for batch in batches:
+                if not batch:
+                    continue
+                X_batch = torch.tensor([s.features for s in batch],
+                                       dtype=torch.float32, device=self._device)
+                y_batch = torch.tensor([s.residual for s in batch],
+                                       dtype=torch.float32, device=self._device)
+                optimizer.zero_grad()
+                pred = self._model(X_batch)
+                loss = F.mse_loss(pred, y_batch)
+                loss.backward()
+                optimizer.step()
 
             # Validation
             if epoch % 10 == 0 or epoch == epochs - 1:
@@ -142,8 +152,7 @@ class CorrectionModel:
                     best_state = self._model.state_dict().copy()
 
                 if verbose:
-                    print(f"  Epoch {epoch:3d}: train_loss={loss.item():.6f}, "
-                          f"val_loss={val_loss:.6f}")
+                    print(f"  Epoch {epoch:3d}: val_loss={val_loss:.6f}")
 
         # Restore best model
         if best_state:

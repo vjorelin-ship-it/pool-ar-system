@@ -19,6 +19,9 @@ system_state = {
     },
 }
 
+import threading
+_system_state_lock = threading.Lock()
+
 
 @router.get("/status")
 async def get_status():

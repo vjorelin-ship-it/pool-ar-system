@@ -17,7 +17,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from config import settings
 from calibration_store import save_calibration, load_calibration, clear_calibration
-from api.routes import router, system_state
+from api.routes import router, system_state, _system_state_lock
 from api.websocket import manager
 from web.scoreboard_app import router as scoreboard_router
 from camera.rtsp_camera import RtspCamera
@@ -114,6 +114,8 @@ class PoolARSystem:
         self._running = False
         if self.camera:
             self.camera.stop()
+        if hasattr(self, 'trajectory_collector') and self.trajectory_collector.is_collecting:
+            self.trajectory_collector.stop()
         self.data_collector.save()
         self.physics_adapter.save()
         print("[System] Stopped (data saved)")
@@ -147,13 +149,14 @@ class PoolARSystem:
                     balls = self.ball_detector.detect(warped)
                 # Update system state
                 # Store both serialized dicts (for phone API) and raw objects (for renderer)
-                system_state["table_state"]["balls"] = [
-                    {"x": float(b.x), "y": float(b.y), "color": b.color,
-                     "is_solid": bool(b.is_solid), "is_stripe": bool(b.is_stripe),
-                     "is_black": bool(b.is_black), "is_cue": bool(b.is_cue)}
-                    for b in balls
-                ]
-                system_state["table_state"]["ball_objects"] = balls
+                with _system_state_lock:
+                    system_state["table_state"]["balls"] = [
+                        {"x": float(b.x), "y": float(b.y), "color": b.color,
+                         "is_solid": bool(b.is_solid), "is_stripe": bool(b.is_stripe),
+                         "is_black": bool(b.is_black), "is_cue": bool(b.is_cue)}
+                        for b in balls
+                    ]
+                    system_state["table_state"]["ball_objects"] = balls
 
             _, buf = cv2.imencode(".jpg", warped, [cv2.IMWRITE_JPEG_QUALITY, 70])
             return buf.tobytes(), warped, balls
@@ -166,6 +169,7 @@ class PoolARSystem:
         """处理进袋事件 → 更新比赛/训练 + 播报 + 数据采集"""
         if not balls:
             return
+        current_mode = system_state["current_mode"]  # snapshot once
         events = self.pocket_detector.update(balls)
         if not events:
             return
@@ -197,7 +201,7 @@ class PoolARSystem:
                 )
 
             # 3. Training mode: auto-judge shot result (first target ball only)
-            if system_state["current_mode"] in ("training", "challenge"):
+            if current_mode in ("training", "challenge"):
                 if (ev.is_solid or ev.is_stripe) and not hasattr(self, '_training_processed'):
                     drill = self.training_mode.session.get_current_drill()
                     cue_final = (0, 0)
@@ -245,7 +249,7 @@ class PoolARSystem:
                     )
 
             # 5. Collect potted balls for match mode (processed once after loop)
-            if system_state["current_mode"] == "match":
+            if current_mode == "match":
                 if ev.is_solid or ev.is_stripe:
                     match_potted.append({
                         "color": ev.color, "is_solid": ev.is_solid,
@@ -263,7 +267,7 @@ class PoolARSystem:
         self._training_processed = False
 
         # 6. Match mode: 一次性处理所有进袋球
-        if system_state["current_mode"] == "match" and match_potted:
+        if current_mode == "match" and match_potted:
             self.match_mode.process_shot(match_potted, match_foul)
             if self._loop:
                 asyncio.run_coroutine_threadsafe(
@@ -451,8 +455,10 @@ class PoolARSystem:
         while self._running:
             has_projector = self._loop and manager.has_projector_clients()
             has_preview = self._loop and manager.has_camera_preview_clients()
-            need_vision = has_projector or has_preview or \
-                system_state["calibration"]["active"]
+            # Read calibration state under lock
+            with _system_state_lock:
+                cal_active = system_state["calibration"]["active"]
+            need_vision = has_projector or has_preview or cal_active
 
             if need_vision and self.camera and self.camera.is_running():
                 frame = self.camera.get_frame()
@@ -496,7 +502,7 @@ class PoolARSystem:
                     frame_counter += 1
 
             # Calibration mode
-            if system_state["calibration"]["active"]:
+            if cal_active:
                 self._do_calibration()
                 time.sleep(1.0)
                 continue
@@ -582,6 +588,18 @@ async def main() -> None:
     disc_thread.start()
 
     system.set_loop(asyncio.get_running_loop())
+
+    # Register shutdown handler
+    import signal
+    loop = asyncio.get_running_loop()
+    def _shutdown():
+        print("\n[System] Shutting down...")
+        system.stop()
+    try:
+        for sig in (signal.SIGINT, signal.SIGTERM):
+            loop.add_signal_handler(sig, _shutdown)
+    except NotImplementedError:
+        pass  # Windows doesn't support add_signal_handler
 
     app = create_app(system)
     print(f"\n[Server] Starting API at http://0.0.0.0:{settings.API_PORT}")

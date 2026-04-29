@@ -54,6 +54,11 @@ class MatchMode:
             player: current_player
         """
         s = self.state
+
+        # Set foul flag before break check so _handle_break sees it
+        if is_foul:
+            s.foul = True
+
         s.record_shot(potted_balls, is_foul)
 
         # 开球处理 - 首颗进球确定球色归属
@@ -74,7 +79,15 @@ class MatchMode:
         return {"action": "switch_player", "player": s.current_player}
 
     def _handle_break(self, potted: List[Dict[str, Any]]) -> dict:
+        """Handle break shot — assign ball groups or handle foul."""
         s = self.state
+        # If foul on break, switch player without assigning groups
+        if s.foul:
+            s.is_break_shot = False
+            s.switch_player()
+            s.foul = False
+            return {"action": "open_table", "player": s.current_player}
+
         s.is_break_shot = False
         if potted:
             first = potted[0]
