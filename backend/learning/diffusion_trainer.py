@@ -365,7 +365,7 @@ class DiffusionTrainer:
                 table = torch.zeros(len(batch["trajectory"]), 3, 600, 1200, device=self.device)
             losses = self.train_step(batch, table)
             for k in total_losses:
-                total_losses[k] += losses[k].item()
+                total_losses[k] += losses[k]
             n_batches += 1
 
         self.scheduler.step()

@@ -151,4 +151,7 @@ class DataCollector:
             ))
             if item["shot_id"] >= self._next_id:
                 self._next_id = item["shot_id"] + 1
+        # Ensure _next_id is truly the max + 1 (robust against file ordering)
+        max_id = max((item.get("shot_id", -1) for item in data), default=-1)
+        self._next_id = max(self._next_id, max_id + 1)
         return len(data)

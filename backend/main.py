@@ -2,11 +2,12 @@ import asyncio
 import base64
 import sys
 import os
-import json
 import socket
 import threading
 import time
 from typing import Optional
+
+os.environ.setdefault('ULTRALYTICS_QUIET', '1')
 
 import uvicorn
 from fastapi import FastAPI
@@ -29,11 +30,9 @@ from vision.table_detector import TableDetector
 from vision.ball_detector import BallDetector
 from vision.pocket_detector import PocketDetector
 from vision.speed_detector import SpeedDetector
-from learning.data_collector import DataCollector, ShotRecord
+from learning.data_collector import DataCollector
 from learning.physics_adapter import PhysicsAdapter
-from learning.correction_model import CorrectionModel
-from learning.diffusion_model import DiffusionTrajectoryModel
-from learning.trajectory_collector import TrajectoryCollector
+MODEL_PATH = os.path.join(os.path.dirname(__file__), 'learning', 'balls.pt')
 
 
 class PoolARSystem:
@@ -41,6 +40,8 @@ class PoolARSystem:
         self.camera: Optional[RtspCamera] = None
         self.table_detector = TableDetector()
         self.ball_detector = BallDetector()
+        self._ml_detector = None
+        self._has_ml = False
         self.physics = PhysicsEngine()
         self.match_mode = MatchMode()
         self.training_mode = TrainingMode()
@@ -50,27 +51,26 @@ class PoolARSystem:
         self.announcer = Announcer()
         self.data_collector = DataCollector()
         self.physics_adapter = PhysicsAdapter()
-        self.correction_model = CorrectionModel()
-        # Diffusion trajectory model
-        self.trajectory_model = DiffusionTrajectoryModel()
-        self.trajectory_collector = TrajectoryCollector()
-        self._use_ai_trajectory = False  # enabled when model loads successfully
         self._running = False
         self._vision_thread: Optional[threading.Thread] = None
         self._loop: Optional[asyncio.AbstractEventLoop] = None
         self._last_table_corners = None
 
-        # Load persisted data
+        # Load persisted learning data
         self.physics_adapter.load()
         self.data_collector.load()
-        self.correction_model.load()
-        # Load diffusion model if available
-        if self.trajectory_model.load():
-            self._use_ai_trajectory = True
-            print(f"[Model] Diffusion trajectory model loaded "
-                  f"({self.trajectory_model.get_param_count():,} params)")
-        else:
-            print("[Model] No diffusion model found, using physics engine")
+
+        # Load ML ball detector if available
+        try:
+            from vision.ball_detector_ml import BallDetectorML
+            self._ml_detector = BallDetectorML()
+            if self._ml_detector.load(MODEL_PATH):
+                self._has_ml = True
+                print(f"[AI] ML ball detector loaded")
+            else:
+                print(f"[AI] No trained model found, using traditional detection")
+        except ImportError:
+            print("[AI] ultralytics not installed, using traditional detection")
 
     def set_loop(self, loop: asyncio.AbstractEventLoop) -> None:
         self._loop = loop
@@ -81,7 +81,6 @@ class PoolARSystem:
         system_state["training_mode"] = self.training_mode
         system_state["table_detector"] = self.table_detector
         system_state["ball_detector"] = self.ball_detector
-        system_state["camera"] = self.camera
         system_state["physics"] = self.physics
 
         # Load persisted calibration
@@ -99,6 +98,7 @@ class PoolARSystem:
             self.camera = RtspCamera(
                 settings.CAMERA_RTSP_URL, settings.CAMERA_FPS)
             self.camera.start()
+            system_state["camera"] = self.camera
             print(f"[Camera] Connected to {settings.CAMERA_RTSP_URL}")
         except Exception as e:
             print(f"[Camera] Failed: {e}")
@@ -108,24 +108,12 @@ class PoolARSystem:
         self._vision_thread = threading.Thread(
             target=self._vision_loop, daemon=True)
         self._vision_thread.start()
-        system_state["main_system"] = self
         print(f"[System] Started ({self.data_collector.count()} prior shots loaded)")
-        phy = self.physics_adapter.get_adjusted_params()
-        print(f"[System] Physics params: cushion={phy.cushion_restitution:.3f}, "
-              f"friction={phy.ball_friction:.4f}")
-
-        # Auto-train correction model if enough data accumulated
-        if self.correction_model.load() or self.data_collector.count() >= 50:
-            if not self.correction_model.is_trained() and self.data_collector.count() >= 50:
-                self._auto_train()
 
     def stop(self) -> None:
         self._running = False
-        if self.trajectory_collector.is_collecting:
-            self.trajectory_collector.stop()
         if self.camera:
             self.camera.stop()
-        self.correction_model.save()
         self.data_collector.save()
         self.physics_adapter.save()
         print("[System] Stopped (data saved)")
@@ -147,18 +135,31 @@ class PoolARSystem:
 
             balls = None
             if detect_balls:
-                balls = self.ball_detector.detect(warped)
+                if self._has_ml and self._ml_detector is not None:
+                    try:
+                        balls = self._ml_detector.detect(warped)
+                    except Exception:
+                        import traceback
+                        traceback.print_exc()
+                        balls = None
+                if not balls:
+                    # Fall back to traditional detection
+                    balls = self.ball_detector.detect(warped)
                 # Update system state
+                # Store both serialized dicts (for phone API) and raw objects (for renderer)
                 system_state["table_state"]["balls"] = [
-                    {"x": b.x, "y": b.y, "color": b.color,
-                     "is_solid": b.is_solid, "is_stripe": b.is_stripe,
-                     "is_black": b.is_black, "is_cue": b.is_cue}
+                    {"x": float(b.x), "y": float(b.y), "color": b.color,
+                     "is_solid": bool(b.is_solid), "is_stripe": bool(b.is_stripe),
+                     "is_black": bool(b.is_black), "is_cue": bool(b.is_cue)}
                     for b in balls
                 ]
+                system_state["table_state"]["ball_objects"] = balls
 
             _, buf = cv2.imencode(".jpg", warped, [cv2.IMWRITE_JPEG_QUALITY, 70])
             return buf.tobytes(), warped, balls
         except Exception:
+            import traceback
+            traceback.print_exc()
             return None, None, None
 
     def _handle_pocket_events(self, balls) -> None:
@@ -236,13 +237,7 @@ class PoolARSystem:
                 ai["drill_index"] = idx
                 if idx >= total:
                     ai["active"] = False
-                    print(f"[AI] Collected {total} shots, auto-training model...")
-                    self._auto_train()
-                    if self._loop:
-                        asyncio.run_coroutine_threadsafe(
-                            manager.broadcast_announce(
-                                "AI数据采集完成，开始训练模型"), self._loop,
-                        )
+                    print(f"[AI] Collected {total} shots, deactivating AI training")
                 elif self._loop:
                     asyncio.run_coroutine_threadsafe(
                         manager.broadcast_announce(
@@ -353,83 +348,6 @@ class PoolARSystem:
         if not cue_ball or not targets:
             return self.renderer.render_to_base64()
 
-        # Try AI trajectory prediction first
-        if self._use_ai_trajectory and self.trajectory_model.is_trained():
-            try:
-                import numpy as np
-                # Build initial ball states
-                initial_balls = np.zeros((16, 8), dtype=np.float32)
-                for i, b in enumerate(balls[:16]):
-                    initial_balls[i, 0] = float(b.x)
-                    initial_balls[i, 1] = float(b.y)
-                    initial_balls[i, 4] = 1.0 if b.is_cue else 0.0
-                    initial_balls[i, 5] = 1.0 if b.is_black else 0.0
-                    initial_balls[i, 6] = 1.0 if b.is_solid else 0.0
-                    initial_balls[i, 7] = 1.0 if b.is_stripe else 0.0
-
-                shot_params = np.array([0.5, 0.0, 0.0], dtype=np.float32)
-                speed_val = system_state["table_state"].get("last_cue_speed", 0)
-                if speed_val > 0:
-                    shot_params[0] = min(1.0, speed_val / 5.0)
-
-                # Physics path as condition
-                physics_path = None
-                if targets:
-                    cue_vec = Vec2(cue_ball.x, cue_ball.y)
-                    t = targets[0]
-                    phys_result = self.physics.find_best_shot(cue_vec, Vec2(t.x, t.y))
-                    if phys_result.success:
-                        physics_path = np.zeros((2, 8, 2), dtype=np.float32)
-                        for j, p in enumerate(phys_result.cue_path[:8]):
-                            physics_path[0, j] = [p.x, p.y]
-                        for j, p in enumerate(phys_result.target_path[:8]):
-                            physics_path[1, j] = [p.x, p.y]
-
-                # Predict
-                trajectory = self.trajectory_model.predict(
-                    np.zeros((600, 1200, 3), dtype=np.uint8),
-                    initial_balls, shot_params, physics_path,
-                    condition_physics=True,
-                )
-
-                # Extract paths
-                target_idx = 0
-                for i, b in enumerate(balls[:16]):
-                    if not b.is_cue:
-                        target_idx = i
-                        break
-
-                cue_path = [(float(trajectory[0, f, 0]), float(trajectory[0, f, 1]))
-                            for f in range(300)
-                            if trajectory[0, f, 0] != 0 or trajectory[0, f, 1] != 0]
-                tgt_path = [(float(trajectory[target_idx, f, 0]),
-                              float(trajectory[target_idx, f, 1]))
-                             for f in range(300)
-                             if trajectory[target_idx, f, 0] != 0 or
-                             trajectory[target_idx, f, 1] != 0]
-
-                if not cue_path:
-                    cue_path = [(cue_ball.x, cue_ball.y)]
-                if not tgt_path:
-                    tgt_path = [(targets[0].x, targets[0].y)]
-
-                cue_final = cue_path[-1] if cue_path else None
-                t = targets[0]
-                overlay = ProjectionOverlay(
-                    cue_path=cue_path,
-                    target_path=tgt_path,
-                    pocket=(tgt_path[-1][0], tgt_path[-1][1]) if tgt_path else (0.5, 0.5),
-                    target_pos=(t.x, t.y),
-                    cue_pos=(cue_ball.x, cue_ball.y),
-                    cue_final_pos=cue_final,
-                    label=f"AI: {t.color}",
-                )
-                return self.renderer.render_to_base64(overlay)
-            except Exception as e:
-                import traceback
-                traceback.print_exc()
-                # Fall through to physics engine
-
         # Physics: find best shot for each target
         cue_vec = Vec2(cue_ball.x, cue_ball.y)
         best_overlay = None
@@ -489,35 +407,7 @@ class PoolARSystem:
             return "低杆" if power_norm > 0.6 else "中低杆"
         return "中杆"
 
-    def _auto_train(self) -> None:
-        """自动训练修正模型（后台线程，不阻塞主循环）"""
-        import threading as _t
-        def _train():
-            try:
-                from learning.dataset import ShotDataset
-                ds = ShotDataset()
-                for rec in self.data_collector.get_all():
-                    features = [
-                        rec.cue_x, rec.cue_y,
-                        rec.target_x, rec.target_y,
-                        rec.pocket_x, rec.pocket_y,
-                        rec.power / 100.0,
-                        rec.spin_x, rec.spin_y,
-                        self.physics_adapter.params.cushion_restitution,
-                        self.physics_adapter.params.ball_friction,
-                        0.035,  # default pocket radius
-                    ]
-                    ds.add(features, [rec.cue_dx, rec.cue_dy, 0, 0,
-                                       rec.obs_cue_final_x - rec.cue_x,
-                                       rec.obs_cue_final_y - rec.cue_y])
-                result = self.correction_model.train(ds, epochs=50, verbose=False)
-                if "error" not in result:
-                    print(f"[AI] Correction model trained: {result}")
-                else:
-                    print(f"[AI] Training deferred: {result.get('error')}")
-            except Exception as e:
-                print(f"[AI] Training error: {e}")
-        _t.Thread(target=_train, daemon=True).start()
+    # ── shot recommendation ──
 
     def _do_calibration(self) -> None:
         cal = system_state["calibration"]
@@ -593,10 +483,6 @@ class PoolARSystem:
                             # Record speed in data collector for last shot
                             print(f"[Speed] Cue speed: {cue_speed} m/s")
 
-                        # Feed trajectory collector (silent background)
-                        if self.trajectory_collector.is_collecting and balls is not None:
-                            self.trajectory_collector.feed_frame(balls)
-
                         # Update system state
                         system_state["table_state"]["detected"] = True
                         system_state["table_state"]["ball_count"] = len(balls)
@@ -622,13 +508,17 @@ class PoolARSystem:
                     if ai.get("active"):
                         image_b64 = self._render_ai_training()
                     else:
-                        balls_list = system_state["table_state"].get("balls", [])
-                        image_b64 = self._compute_and_render_shot(None, balls_list)
-                    asyncio.run_coroutine_threadsafe(
+                        ball_objects = system_state["table_state"].get("ball_objects", [])
+                        image_b64 = self._compute_and_render_shot(None, ball_objects)
+                    n_sent = asyncio.run_coroutine_threadsafe(
                         manager.broadcast_projection(image_b64), self._loop,
                     )
-                except Exception:
-                    pass
+                    # Log every ~2s whether projection was sent
+                    if frame_counter % 7 == 0:
+                        print(f"[Projection] Sent frame (clients: {len(manager._projector_clients)})")
+                except Exception as e:
+                    import traceback
+                    traceback.print_exc()
                 time.sleep(0.3)
             else:
                 time.sleep(0.1)
@@ -662,8 +552,8 @@ class PoolARSystem:
                     response = f"POOL_AR_SERVER:{local_ip}"
                     sock.sendto(response.encode(), addr)
                     print(f"[Discovery] Responded to {addr} -> {local_ip}")
-            except Exception:
-                pass
+            except Exception as e:
+                print(f"[Discovery] Error: {e}")
 
 
 def create_app(system: PoolARSystem) -> FastAPI:

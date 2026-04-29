@@ -215,99 +215,48 @@ async def projector_preview_websocket(ws: WebSocket):
         manager.disconnect(ws)
 
 
-# ── Model & Collector API ──
+# ── Annotation API (for training data labeling) ──
 
-@router.get("/model/status")
-async def get_model_status():
-    """Get diffusion model status"""
-    m = system_state.get("main_system")
-    if m is None:
-        raise HTTPException(503, "System not initialized")
-    return m.trajectory_model.get_status()
+import os as _os
+
+_ANNOTATE_DIR = _os.path.join(_os.path.dirname(__file__), '..', 'learning', 'training_data')
+_IMG_DIR = _os.path.join(_ANNOTATE_DIR, 'images')
+_LABEL_DIR = _os.path.join(_ANNOTATE_DIR, 'labels')
 
 
-@router.post("/model/pretrain")
-async def trigger_pretrain():
-    """Trigger synthetic data pretraining (background thread)"""
-    m = system_state.get("main_system")
-    if m is None:
-        raise HTTPException(503, "System not initialized")
-    from learning.synthetic_data import SyntheticDataGenerator
-    gen = SyntheticDataGenerator(num_frames=m.trajectory_model.config["n_frames"])
-    samples = gen.generate(num_samples=1000)  # 1000 for quick test, increase for production
-    m.trajectory_model.train_async(samples, epochs=50, batch_size=8)
-    return {"status": "started", "samples": len(samples)}
+@router.get("/annotate/images")
+async def list_annotate_images():
+    if not _os.path.isdir(_IMG_DIR):
+        return []
+    files = sorted([f for f in _os.listdir(_IMG_DIR) if f.endswith('.jpg')])
+    return files
 
 
-@router.post("/model/finetune")
-async def trigger_finetune():
-    """Trigger real data fine-tuning (background thread)"""
-    m = system_state.get("main_system")
-    if m is None:
-        raise HTTPException(503, "System not initialized")
-    import os, json
-    data_dir = os.path.join(os.path.dirname(__file__),
-                            '..', 'learning', 'collected_shots')
-    real_data = []
-    if os.path.isdir(data_dir):
-        for f in sorted(os.listdir(data_dir)):
-            if f.endswith('.json'):
-                with open(os.path.join(data_dir, f)) as fp:
-                    real_data.append(json.load(fp))
-    if len(real_data) < 10:
-        raise HTTPException(400, f"Need at least 10 collected shots, have {len(real_data)}")
-    m.trajectory_model.train_async(real_data, epochs=50, batch_size=8)
-    return {"status": "started", "samples": len(real_data)}
+@router.get("/annotate/image/{name}")
+async def get_annotate_image(name: str):
+    from fastapi.responses import FileResponse
+    path = _os.path.join(_IMG_DIR, name)
+    if not _os.path.isfile(path):
+        raise HTTPException(404, "Image not found")
+    return FileResponse(path, media_type="image/jpeg")
 
 
-@router.get("/model/config")
-async def get_model_config():
-    m = system_state.get("main_system")
-    if m is None:
-        raise HTTPException(503)
-    return {
-        "condition_physics": m._use_ai_trajectory,
-        "model_config": m.trajectory_model.config,
-    }
+@router.get("/annotate/labels/{name}")
+async def get_annotate_labels(name: str):
+    from fastapi.responses import PlainTextResponse
+    path = _os.path.join(_LABEL_DIR, name)
+    if not _os.path.isfile(path):
+        return PlainTextResponse("", status_code=200)
+    return PlainTextResponse(open(path).read())
 
 
-@router.post("/model/config")
-async def set_model_config(req: Request):
-    m = system_state.get("main_system")
-    if m is None:
-        raise HTTPException(503)
-    body = await req.json()
-    if "condition_physics" in body:
-        m._use_ai_trajectory = bool(body["condition_physics"])
-    return {"ok": True}
-
-
-@router.get("/collector/status")
-async def get_collector_status():
-    m = system_state.get("main_system")
-    if m is None:
-        raise HTTPException(503)
-    c = m.trajectory_collector
-    return {
-        "collecting": c.is_collecting,
-        "recording": c.is_recording,
-        "total_collected": c.count(),
-    }
-
-
-@router.post("/collector/start")
-async def start_collector():
-    m = system_state.get("main_system")
-    if m is None:
-        raise HTTPException(503)
-    m.trajectory_collector.start()
-    return {"status": "started"}
-
-
-@router.post("/collector/stop")
-async def stop_collector():
-    m = system_state.get("main_system")
-    if m is None:
-        raise HTTPException(503)
-    m.trajectory_collector.stop()
-    return {"status": "stopped", "total": m.trajectory_collector.count()}
+@router.post("/annotate/save/{name}")
+async def save_annotate_labels(name: str, req: Request):
+    from fastapi.responses import PlainTextResponse
+    body = await req.body()
+    _os.makedirs(_LABEL_DIR, exist_ok=True)
+    path = _os.path.join(_LABEL_DIR, name)
+    text = body.decode('utf-8').strip()
+    with open(path, 'w') as f:
+        f.write(text if text else ' ')
+    return PlainTextResponse("OK")

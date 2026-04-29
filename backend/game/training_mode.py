@@ -93,34 +93,6 @@ class TrainingMode:
             "feedback": feedback,
         }
 
-    def auto_verify_placement(self, balls: List) -> dict:
-        """自动验证摆球位置（从视觉检测结果）
-
-        对比当前球的位置与训练题的要求位置。
-        """
-        drill = self.session.get_current_drill()
-
-        # 找到最接近要求的母球和目标球
-        actual_cue = None
-        actual_target = None
-
-        for b in balls:
-            if hasattr(b, 'is_cue') and b.is_cue:
-                d = self._distance((b.x, b.y), drill.cue_pos)
-                if actual_cue is None or d < self._distance(actual_cue, drill.cue_pos):
-                    actual_cue = (b.x, b.y)
-
-        for b in balls:
-            if hasattr(b, 'is_stripe') and (b.is_solid or b.is_stripe):
-                d = self._distance((b.x, b.y), drill.target_pos)
-                if actual_target is None or d < self._distance(actual_target, drill.target_pos):
-                    actual_target = (b.x, b.y)
-
-        if not actual_cue or not actual_target:
-            return {"all_correct": False, "error": "无法检测到对应球"}
-
-        return self.verify_placement(actual_cue, actual_target)
-
     def process_auto_result(self, target_pocketed: bool,
                              drill: 'TrainingDrill',
                              cue_final: Tuple[float, float]) -> dict:

@@ -375,19 +375,6 @@ class PhysicsEngine:
         """
         return 0.08 + math.sqrt(dist) * 0.25
 
-    def find_best_shot_for_mode(self, cue_pos: Vec2, targets: List[Vec2]) -> ShotResult:
-        """从多个目标球中选择最佳击球方案"""
-        best = self._no_shot()
-        best_score = float("inf")
-        for t in targets:
-            shot = self.find_best_shot(cue_pos, t)
-            if shot.success:
-                score = cue_pos.dist_to(t)
-                if score < best_score:
-                    best_score = score
-                    best = shot
-        return best
-
     def _no_shot(self) -> ShotResult:
         return ShotResult(
             cue_path=[], target_path=[], target_pocket=Vec2(0, 0),

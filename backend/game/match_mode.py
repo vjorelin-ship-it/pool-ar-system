@@ -73,13 +73,6 @@ class MatchMode:
         s.switch_player()
         return {"action": "switch_player", "player": s.current_player}
 
-    def get_recommended_targets(self, balls: List[dict]) -> List[dict]:
-        s = self.state
-        player_balls = self._get_player_balls(balls, s.current_player)
-        if not player_balls:
-            return []
-        return sorted(player_balls, key=lambda b: b.get("difficulty", 0))
-
     def _handle_break(self, potted: List[Dict[str, Any]]) -> dict:
         s = self.state
         s.is_break_shot = False
@@ -139,16 +132,6 @@ class MatchMode:
 
         # 正常打进己方球，继续击球
         return {"action": "continue", "player": s.current_player}
-
-    def _get_player_balls(self, balls: List[dict],
-                          player: int) -> List[dict]:
-        s = self.state
-        group = s.player1_balls if player == 1 else s.player2_balls
-        if group == "solids":
-            return [b for b in balls if b.get("is_solid")]
-        elif group == "stripes":
-            return [b for b in balls if b.get("is_stripe")]
-        return []
 
     def _remaining_of_group(self, player: int) -> int:
         s = self.state

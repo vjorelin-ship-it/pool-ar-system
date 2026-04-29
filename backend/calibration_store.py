@@ -5,7 +5,6 @@
 """
 import json
 import os
-import tempfile
 from typing import Optional, List, Tuple
 
 CALIBRATION_FILE = os.path.join(os.path.dirname(__file__), "calibration_data.json")

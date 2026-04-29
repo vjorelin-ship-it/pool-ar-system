@@ -6,7 +6,6 @@
 from dataclasses import dataclass, field
 from typing import List, Optional, Tuple, Set, Dict
 import time
-from collections import defaultdict
 
 
 # 六袋口归一化坐标（中式八球标准位置）
@@ -136,20 +135,6 @@ class PocketDetector:
             self._missed.pop(tid, None)
 
         return self._events
-
-    def get_pocketed_ball_ids(self) -> Set[int]:
-        return {e.ball_id for e in self._events}
-
-    def is_cue_pocketed(self) -> bool:
-        return any(e.is_cue for e in self._events)
-
-    def has_events(self) -> bool:
-        return len(self._events) > 0
-
-    def clear_events(self) -> None:
-        self._events = []
-        self._missed.clear()
-        self._tracked.clear()
 
     def reset(self) -> None:
         """重置全部状态（新对局/新训练）"""

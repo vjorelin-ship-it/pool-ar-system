@@ -20,62 +20,125 @@ class Ball:
 
 
 class BallDetector:
-    # Pure color (solid) balls in Chinese 8-ball
-    SOLID_COLORS_BGR: dict = {
-        "yellow": (0, 200, 200),
-        "blue": (200, 0, 0),
-        "red": (0, 0, 200),
-        "purple": (128, 0, 128),
-        "orange": (0, 100, 200),
-        "green": (0, 128, 0),
-        "brown": (0, 50, 100),
-    }
-
-    STRIPE_COLORS_BGR: dict = {
-        "yellow": (0, 200, 200),
-        "blue": (200, 0, 0),
-        "red": (0, 0, 200),
-        "purple": (128, 0, 128),
-        "orange": (0, 100, 200),
-        "green": (0, 128, 0),
-        "brown": (0, 50, 100),
-    }
-
-    def __init__(self, min_radius: int = 8, max_radius: int = 20,
-                 stripe_white_threshold: int = 180):
+    def __init__(self, min_radius: int = 8, max_radius: int = 20):
         self._min_r = min_radius
         self._max_r = max_radius
-        self._stripe_white_threshold = stripe_white_threshold
 
     def detect(self, warped: cv2.Mat) -> List[Ball]:
+        balls: List[Ball] = []
+        h, w = warped.shape[:2]
         gray = cv2.cvtColor(warped, cv2.COLOR_BGR2GRAY)
+        hsv = cv2.cvtColor(warped, cv2.COLOR_BGR2HSV)
+
+        # ── Cue ball: direct white blob detection ──
+        cue_ball = self._detect_cue_by_blob(warped, gray, hsv)
+        if cue_ball:
+            balls.append(cue_ball)
+        else:
+            print("[BallDetect] No cue ball found")
+
+        # ── Colored balls: HoughCircles with strict params ──
+        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+        gray_enh = clahe.apply(gray)
         circles = cv2.HoughCircles(
-            gray, cv2.HOUGH_GRADIENT, dp=1.2, minDist=30,
-            param1=100, param2=25,
+            gray_enh, cv2.HOUGH_GRADIENT, dp=1.2, minDist=20,
+            param1=70, param2=24,
             minRadius=self._min_r, maxRadius=self._max_r,
         )
 
-        balls: List[Ball] = []
-        if circles is None:
-            return balls
+        if circles is not None:
+            positions = [(float(c[0]), float(c[1])) for c in circles[0]]
+            for i, (cx, cy, r) in enumerate(circles[0]):
+                if cx < r + 5 or cx > w - r - 5 or cy < r + 5 or cy > h - r - 5:
+                    continue
+                # Skip if too close to cue ball
+                if cue_ball:
+                    dcx = cx / w - cue_ball.x
+                    dcy = cy / h - cue_ball.y
+                    if (dcx ** 2 + dcy ** 2) ** 0.5 < 0.05:
+                        continue
+                # Neighbor density filter — real balls can be near each other
+                neighbors = sum(1 for j, (px, py) in enumerate(positions)
+                                if i != j and ((cx - px) ** 2 + (cy - py) ** 2) ** 0.5 < 35)
+                if neighbors > 3:
+                    continue
 
-        h, w = warped.shape[:2]
-        for (cx, cy, r) in circles[0]:
-            ball = self._classify_ball(
-                frame=warped, cx=int(cx), cy=int(cy), radius=int(r),
-                x=cx / w, y=cy / h,
-            )
-            if ball:
-                balls.append(ball)
+                ball = self._classify_ball(
+                    frame=warped, cx=int(cx), cy=int(cy), radius=int(r),
+                    x=float(cx) / w, y=float(cy) / h, gray=gray_enh,
+                )
+                if ball:
+                    balls.append(ball)
 
+        if balls:
+            cue = sum(1 for b in balls if b.is_cue)
+            colored = len(balls) - cue
+            if colored > 0:
+                print(f"[BallDetect] Found {cue} cue + {colored} colored balls")
         return balls
 
-    def detect_cue_ball(self, warped: cv2.Mat) -> Optional[Ball]:
-        balls = self.detect(warped)
-        for b in balls:
-            if b.is_cue:
-                return b
-        return None
+    def _detect_cue_by_blob(self, frame: cv2.Mat, gray: cv2.Mat,
+                            hsv: cv2.Mat) -> Optional[Ball]:
+        """Detect cue ball as the brightest, most circular white blob."""
+        h, w = frame.shape[:2]
+        white_mask = cv2.inRange(hsv, np.array([0, 0, 150]),
+                                 np.array([180, 40, 255]))
+
+        # Use findContours for proper circularity measurement
+        contours, _ = cv2.findContours(white_mask, cv2.RETR_EXTERNAL,
+                                       cv2.CHAIN_APPROX_SIMPLE)
+        candidates = []
+        EXPECTED_R = 12.0  # expected ball radius in 1200px-wide table
+
+        for cnt in contours:
+            area = cv2.contourArea(cnt)
+            if area < 200 or area > 1200:
+                continue
+            peri = cv2.arcLength(cnt, True)
+            if peri < 1:
+                continue
+            # Circularity: 4*pi*area / perimeter^2 (1.0 = perfect circle)
+            circularity = 4 * np.pi * area / (peri * peri)
+            if circularity < 0.30:
+                continue
+
+            # Bounding box
+            xb, yb, bw, bh = cv2.boundingRect(cnt)
+            aspect = max(bw, bh) / (min(bw, bh) + 1e-6)
+            if aspect > 1.6:
+                continue
+
+            cx = xb + bw / 2.0
+            cy = yb + bh / 2.0
+            radius = max(bw, bh) / 2.0
+
+            if cx < radius + 5 or cx > w - radius - 5 or cy < radius + 5 or cy > h - radius - 5:
+                continue
+
+            # Mean HSV under the contour
+            mask = np.zeros(gray.shape, dtype=np.uint8)
+            cv2.drawContours(mask, [cnt], -1, 255, -1)
+            mean_v = float(cv2.mean(gray, mask)[0])
+            mean_s = float(cv2.mean(hsv[:, :, 1], mask)[0])
+            if mean_s > 30:
+                continue
+
+            # Score: circularity + close to expected size + brightness
+            size_score = 1.0 - min(abs(radius - EXPECTED_R) / EXPECTED_R, 1.0)
+            score = circularity * 0.4 + size_score * 0.35 + (mean_v / 255.0) * 0.25
+            candidates.append((score, cx, cy, radius, circularity, mean_v))
+
+        if not candidates:
+            return None
+
+        candidates.sort(reverse=True)
+        best = candidates[0]
+        score, cx, cy, radius, circ, v = best
+        print(f"[BallDetect] Cue ball at ({cx/w:.3f},{cy/h:.3f}) r={radius:.0f} "
+              f"circ={circ:.2f} V={v:.0f} (score={score:.3f}, {len(candidates)} candidates)")
+        return Ball(x=float(cx) / w, y=float(cy) / h, radius=float(radius), color="white",
+                    is_stripe=False, is_solid=False,
+                    is_black=False, is_cue=True)
 
     @staticmethod
     def _create_ball_mask(frame: cv2.Mat, cx: int, cy: int, r: int) -> cv2.Mat:
@@ -84,7 +147,7 @@ class BallDetector:
         return mask
 
     def _classify_ball(self, frame: cv2.Mat, cx: int, cy: int, radius: int,
-                       x: float, y: float) -> Optional[Ball]:
+                       x: float, y: float, gray: Optional[cv2.Mat] = None) -> Optional[Ball]:
         """分类球：检测是否为白球/黑8，否则区分纯色/花色+识别颜色"""
         mask = self._create_ball_mask(frame, cx, cy, radius)
         ball_pixels = frame[mask > 0]
@@ -93,22 +156,39 @@ class BallDetector:
 
         avg_bgr = cv2.mean(frame, mask)[:3]
 
+        # Edge strength check: real balls have clear circular edges
+        if gray is not None:
+            edge_strength = self._circle_edge_strength(gray, cx, cy, radius)
+            if edge_strength < 8:
+                return None
+
         # 用HSV检测白球和黑8（更抗偏色）
         hsv_ball = cv2.cvtColor(ball_pixels.reshape(1, -1, 3), cv2.COLOR_BGR2HSV)[0]
-        mean_sat = np.mean(hsv_ball[:, 1])
-        mean_val = np.mean(hsv_ball[:, 2])
+        mean_sat = float(np.mean(hsv_ball[:, 1]))
+        mean_val = float(np.mean(hsv_ball[:, 2]))
 
-        # 白球 (母球)
-        if mean_sat < 35 and mean_val > 180:
-            return Ball(x=x, y=y, radius=float(radius), color="white",
+        # 白球 (母球) — must be distinctively bright vs table cloth
+        b, g, r = float(avg_bgr[0]), float(avg_bgr[1]), float(avg_bgr[2])
+        # BGR channels close to each other (white/gray) and all above threshold
+        is_near_white = (b > 150 and g > 150 and r > 150 and
+                         max(b, g, r) - min(b, g, r) < 35)
+        # Check local contrast: the ball should be brighter than the ring around it
+        local_bright = self._local_brightness_ratio(frame, cx, cy, radius)
+        if mean_sat < 30 and mean_val > 160 and is_near_white and local_bright > 1.25:
+            return Ball(x=float(x), y=float(y), radius=float(radius), color="white",
                         is_stripe=False, is_solid=False,
                         is_black=False, is_cue=True)
 
-        # 黑8
-        if mean_val < 40 and mean_sat < 80:
-            return Ball(x=x, y=y, radius=float(radius), color="black",
+        # 黑8 — very dark, low saturation, dark BGR
+        is_dark_bgr = (b < 50 and g < 50 and r < 50)
+        if mean_val < 50 and mean_sat < 80 and is_dark_bgr:
+            return Ball(x=float(x), y=float(y), radius=float(radius), color="black",
                         is_stripe=False, is_solid=False,
                         is_black=True, is_cue=False)
+
+        # Colored ball: must have noticeable saturation (not just cloth texture)
+        if mean_sat < 45:
+            return None
 
         # 识别基色（转换到HSV做颜色匹配，更符合人眼感知）
         hsv_mean = cv2.cvtColor(
@@ -121,11 +201,46 @@ class BallDetector:
         is_solid = self._is_solid_ball(frame, cx, cy, radius)
 
         return Ball(
-            x=x, y=y, radius=float(radius), color=base_color,
+            x=float(x), y=float(y), radius=float(radius), color=base_color,
             is_stripe=not is_solid,
             is_solid=is_solid,
             is_black=False, is_cue=False,
         )
+
+    @staticmethod
+    def _local_brightness_ratio(frame: cv2.Mat, cx: int, cy: int, r: int) -> float:
+        """Ratio of ball brightness to surrounding ring brightness.
+        A white ball should be >1.25x brighter than the cloth around it.
+        """
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        inner_mask = np.zeros(gray.shape, dtype=np.uint8)
+        cv2.circle(inner_mask, (cx, cy), r, 255, -1)
+        outer_mask = np.zeros(gray.shape, dtype=np.uint8)
+        cv2.circle(outer_mask, (cx, cy), r + 8, 255, -1)
+        cv2.circle(outer_mask, (cx, cy), r + 2, 0, -1)
+        inner_mean = cv2.mean(gray, inner_mask)[0]
+        outer_mean = cv2.mean(gray, outer_mask)[0]
+        if outer_mean < 1:
+            return 1.0
+        return float(inner_mean) / float(outer_mean)
+
+    @staticmethod
+    def _circle_edge_strength(gray: cv2.Mat, cx: int, cy: int, r: int) -> float:
+        """Measure edge strength around the circle boundary."""
+        h, w = gray.shape[:2]
+        # Sample 16 points around the circle boundary
+        angles = np.linspace(0, 2 * np.pi, 16, endpoint=False)
+        strengths = []
+        for a in angles:
+            x1 = int(cx + r * np.cos(a))
+            y1 = int(cy + r * np.sin(a))
+            x2 = int(cx + (r + 3) * np.cos(a))
+            y2 = int(cy + (r + 3) * np.sin(a))
+            if 0 <= x1 < w and 0 <= y1 < h and 0 <= x2 < w and 0 <= y2 < h:
+                strengths.append(abs(float(gray[y1, x1]) - float(gray[y2, x2])))
+        if not strengths:
+            return 0.0
+        return float(np.median(strengths))
 
     def _is_solid_ball(self, frame: cv2.Mat, cx: int, cy: int,
                        r: int) -> bool:
@@ -193,9 +308,9 @@ class BallDetector:
     @staticmethod
     def _find_closest_color_hsv(hsv: Tuple) -> Optional[str]:
         """HSV空间颜色匹配（以色相H为主，饱和度和亮度为辅）"""
-        h, s, v = hsv
+        h, s, v = int(hsv[0]), int(hsv[1]), int(hsv[2])
         # 低饱和度 → 灰白，不匹配任何彩色
-        if s < 30 or v < 30:
+        if s < 20 or v < 25:
             return None
         best_name = None
         best_score = float("inf")
@@ -209,4 +324,4 @@ class BallDetector:
             if score < best_score:
                 best_score = score
                 best_name = name
-        return best_name if best_score < 40 else None
+        return best_name if best_score < 55 else None
