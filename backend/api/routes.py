@@ -237,6 +237,11 @@ async def projector_preview_websocket(ws: WebSocket):
         manager.disconnect(ws)
 
 
+@router.websocket("/ws/camera-upload")
+async def camera_upload_websocket(ws: WebSocket):
+    await manager.connect_camera_upload(ws)
+
+
 # ── Annotation API (for training data labeling) ──
 
 import os as _os

@@ -166,5 +166,29 @@ class ConnectionManager:
             except Exception:
                 self._phone_clients.discard(ws)
 
+    # ─── Camera Upload (USB camera frames from Android box) ───
+
+    async def connect_camera_upload(self, ws: WebSocket) -> None:
+        await ws.accept()
+        if not hasattr(self, '_camera_upload_clients'):
+            self._camera_upload_clients = set()
+        self._camera_upload_clients.add(ws)
+        try:
+            while True:
+                msg = await ws.receive_text()
+                try:
+                    data = json.loads(msg)
+                    if data.get("type") == "camera_frame":
+                        import base64
+                        jpeg_bytes = base64.b64decode(data["data"])
+                        ts = data.get("timestamp", 0.0)
+                        cam = system_state.get("ws_camera")
+                        if cam is not None:
+                            cam.receive_frame(jpeg_bytes, ts)
+                except Exception:
+                    pass
+        except WebSocketDisconnect:
+            self._camera_upload_clients.discard(ws)
+
 
 manager = ConnectionManager()

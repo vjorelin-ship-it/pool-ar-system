@@ -95,15 +95,24 @@ class PoolARSystem:
             print(f"[Calibration] Loaded saved calibration ({len(cal_data['markers'])} markers)")
         system_state["announcer"] = self.announcer
 
-        try:
-            self.camera = RtspCamera(
-                settings.CAMERA_RTSP_URL, settings.CAMERA_FPS)
+        from config import settings as _settings
+        if getattr(_settings, 'CAMERA_SOURCE', 'rtsp') == "websocket":
+            from camera.ws_camera import WebSocketCamera
+            self.camera = WebSocketCamera()
             self.camera.start()
+            system_state["ws_camera"] = self.camera
             system_state["camera"] = self.camera
-            print(f"[Camera] Connected to {settings.CAMERA_RTSP_URL}")
-        except Exception as e:
-            print(f"[Camera] Failed: {e}")
-            print("[Camera] Running in offline mode (no camera)")
+            print("[Camera] WebSocket camera mode (waiting for Android box)")
+        else:
+            try:
+                self.camera = RtspCamera(
+                    settings.CAMERA_RTSP_URL, settings.CAMERA_FPS)
+                self.camera.start()
+                system_state["camera"] = self.camera
+                print(f"[Camera] Connected to {settings.CAMERA_RTSP_URL}")
+            except Exception as e:
+                print(f"[Camera] Failed: {e}")
+                print("[Camera] Running in offline mode (no camera)")
 
         self._running = True
         self._vision_thread = threading.Thread(
