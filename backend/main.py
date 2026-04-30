@@ -32,6 +32,8 @@ from vision.pocket_detector import PocketDetector
 from vision.speed_detector import SpeedDetector
 from learning.data_collector import DataCollector
 from learning.physics_adapter import PhysicsAdapter
+from learning.diffusion_model import DiffusionTrajectoryModel
+from learning.trajectory_collector import TrajectoryCollector
 MODEL_PATH = os.path.join(os.path.dirname(__file__), 'learning', 'balls.pt')
 
 
@@ -51,6 +53,10 @@ class PoolARSystem:
         self.announcer = Announcer()
         self.data_collector = DataCollector()
         self.physics_adapter = PhysicsAdapter()
+        self.trajectory_model = DiffusionTrajectoryModel()
+        self.trajectory_collector = TrajectoryCollector(
+            save_dir=settings.TRAJECTORY_DATA_DIR)
+        self._use_ai_trajectory = False
         self._running = False
         self._vision_thread: Optional[threading.Thread] = None
         self._loop: Optional[asyncio.AbstractEventLoop] = None
@@ -60,6 +66,14 @@ class PoolARSystem:
         # Load persisted learning data
         self.physics_adapter.load()
         self.data_collector.load()
+
+        # Load diffusion model if available
+        if self.trajectory_model.load():
+            self._use_ai_trajectory = True
+            print(f"[Model] Diffusion trajectory model loaded "
+                  f"({self.trajectory_model.get_param_count():,} params)")
+        else:
+            print("[Model] No diffusion model found, using physics engine")
 
         # Load ML ball detector if available
         try:

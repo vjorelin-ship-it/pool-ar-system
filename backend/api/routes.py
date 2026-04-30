@@ -242,18 +242,79 @@ async def camera_upload_websocket(ws: WebSocket):
     await manager.connect_camera_upload(ws)
 
 
-# ── Annotation API (for training data labeling) ──
+# ── Training Data Directory Config ──
 
 import os as _os
+from config import settings as _settings
 
-_ANNOTATE_DIR = _os.path.join(_os.path.dirname(__file__), '..', 'learning', 'training_data')
-_IMG_DIR = _os.path.join(_ANNOTATE_DIR, 'images')
-_LABEL_DIR = _os.path.join(_ANNOTATE_DIR, 'labels')
+
+def _get_ball_ml_dir() -> str:
+    d = _settings.BALL_ML_DATA_DIR
+    _os.makedirs(d, exist_ok=True)
+    return d
+
+
+def _get_ball_ml_img_dir() -> str:
+    d = _os.path.join(_get_ball_ml_dir(), "images")
+    _os.makedirs(d, exist_ok=True)
+    return d
+
+
+def _get_ball_ml_label_dir() -> str:
+    d = _os.path.join(_get_ball_ml_dir(), "labels")
+    _os.makedirs(d, exist_ok=True)
+    return d
+
+
+def _get_trajectory_dir() -> str:
+    d = _settings.TRAJECTORY_DATA_DIR
+    _os.makedirs(d, exist_ok=True)
+    return d
+
+
+@router.get("/config/training-dirs")
+async def get_training_dirs():
+    """获取训练数据存储目录配置"""
+    return {
+        "ball_ml_data_dir": _settings.BALL_ML_DATA_DIR,
+        "ball_ml_img_count": len([
+            f for f in _os.listdir(_get_ball_ml_img_dir())
+            if f.endswith('.jpg')
+        ]) if _os.path.isdir(_get_ball_ml_img_dir()) else 0,
+        "trajectory_data_dir": _settings.TRAJECTORY_DATA_DIR,
+        "trajectory_shot_count": len([
+            f for f in _os.listdir(_get_trajectory_dir())
+            if f.endswith('.json')
+        ]) if _os.path.isdir(_get_trajectory_dir()) else 0,
+    }
+
+
+@router.post("/config/training-dirs")
+async def set_training_dirs(req: Request):
+    """修改训练数据存储目录"""
+    body = await req.json()
+    changed = []
+    if "ball_ml_data_dir" in body:
+        new_dir = str(body["ball_ml_data_dir"]).strip()
+        if new_dir and _os.path.isabs(new_dir):
+            _settings.BALL_ML_DATA_DIR = new_dir
+            _os.makedirs(new_dir, exist_ok=True)
+            changed.append("ball_ml_data_dir")
+    if "trajectory_data_dir" in body:
+        new_dir = str(body["trajectory_data_dir"]).strip()
+        if new_dir and _os.path.isabs(new_dir):
+            _settings.TRAJECTORY_DATA_DIR = new_dir
+            _os.makedirs(new_dir, exist_ok=True)
+            changed.append("trajectory_data_dir")
+    return {"ok": True, "changed": changed, "ball_ml_data_dir": _settings.BALL_ML_DATA_DIR,
+            "trajectory_data_dir": _settings.TRAJECTORY_DATA_DIR}
+
+
+# ── Annotation API (for training data labeling) ──
 
 
 def _resolve_safe_path(base_dir: str, name: str) -> str:
     """Resolve a safe path within base_dir, preventing traversal."""
-    # Reject names with path separators or dangerous patterns
     if '..' in name or '/' in name or '\\' in name:
         raise HTTPException(403, "Invalid filename")
     safe = _os.path.realpath(_os.path.join(base_dir, name))
@@ -265,16 +326,17 @@ def _resolve_safe_path(base_dir: str, name: str) -> str:
 
 @router.get("/annotate/images")
 async def list_annotate_images():
-    if not _os.path.isdir(_IMG_DIR):
+    img_dir = _get_ball_ml_img_dir()
+    if not _os.path.isdir(img_dir):
         return []
-    files = sorted([f for f in _os.listdir(_IMG_DIR) if f.endswith('.jpg')])
+    files = sorted([f for f in _os.listdir(img_dir) if f.endswith('.jpg')])
     return files
 
 
 @router.get("/annotate/image/{name}")
 async def get_annotate_image(name: str):
     from fastapi.responses import FileResponse
-    path = _resolve_safe_path(_IMG_DIR, name)
+    path = _resolve_safe_path(_get_ball_ml_img_dir(), name)
     if not _os.path.isfile(path):
         raise HTTPException(404, "Image not found")
     return FileResponse(path, media_type="image/jpeg")
@@ -283,7 +345,7 @@ async def get_annotate_image(name: str):
 @router.get("/annotate/labels/{name}")
 async def get_annotate_labels(name: str):
     from fastapi.responses import PlainTextResponse
-    path = _resolve_safe_path(_LABEL_DIR, name)
+    path = _resolve_safe_path(_get_ball_ml_label_dir(), name)
     if not _os.path.isfile(path):
         return PlainTextResponse("", status_code=200)
     with open(path) as f:
@@ -293,9 +355,9 @@ async def get_annotate_labels(name: str):
 @router.post("/annotate/save/{name}")
 async def save_annotate_labels(name: str, req: Request):
     from fastapi.responses import PlainTextResponse
+    label_dir = _get_ball_ml_label_dir()
     body = await req.body()
-    _os.makedirs(_LABEL_DIR, exist_ok=True)
-    path = _resolve_safe_path(_LABEL_DIR, name)
+    path = _resolve_safe_path(label_dir, name)
     text = body.decode('utf-8').strip()
     with open(path, 'w') as f:
         f.write(text if text else ' ')

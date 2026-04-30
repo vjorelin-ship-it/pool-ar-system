@@ -129,6 +129,13 @@
 
   .toggle-row { display: flex; align-items: center; justify-content: space-between; padding: 6px 0; font-size: 12px; }
 
+  .dir-input {
+    width: 100%; padding: 4px 8px; background: var(--bg); color: var(--text);
+    border: 1px solid var(--border); border-radius: 3px; font-family: var(--mono);
+    font-size: 10px; margin-top: 4px;
+  }
+  .dir-input:focus { border-color: var(--accent); outline: none; }
+
   /* Scrollbar */
   ::-webkit-scrollbar { width: 4px; }
   ::-webkit-scrollbar-track { background: transparent; }
@@ -226,6 +233,17 @@
       <span>AI轨迹预测</span>
       <label class="toggle"><input type="checkbox" id="aiTrajectoryToggle" onchange="toggleAITrajectory()"><span class="slider"></span></label>
     </div>
+  </div>
+
+  <!-- Training Data Directories -->
+  <div class="card">
+    <div class="card-title">■ 训练素材目录</div>
+    <div style="font-size:11px;color:var(--text-dim);margin-bottom:8px">球检测ML数据</div>
+    <input class="dir-input" id="ballMlDir" onchange="updateDir('ball_ml_data_dir', this.value)" placeholder="加载中...">
+    <div style="font-size:10px;color:var(--text-dim);margin-top:2px">已标注图片: <span id="ballMlImgCount">—</span> 张</div>
+    <div style="font-size:11px;color:var(--text-dim);margin-top:8px;margin-bottom:8px">轨迹训练数据</div>
+    <input class="dir-input" id="trajDir" onchange="updateDir('trajectory_data_dir', this.value)" placeholder="加载中...">
+    <div style="font-size:10px;color:var(--text-dim);margin-top:2px">已采集击球: <span id="trajDirShotCount">—</span> 杆</div>
   </div>
 
   <!-- Calibration -->
@@ -415,6 +433,27 @@ function toggleAITrajectory() {
   apiCall('POST', '/api/model/config', { condition_physics: on });
 }
 
+// ─── Directory Config ──────────────────────────────────────
+async function loadDirs() {
+  try {
+    const resp = await fetch('/api/config/training-dirs');
+    if (resp.ok) {
+      const d = await resp.json();
+      document.getElementById('ballMlDir').value = d.ball_ml_data_dir;
+      document.getElementById('trajDir').value = d.trajectory_data_dir;
+      document.getElementById('ballMlImgCount').textContent = d.ball_ml_img_count;
+      document.getElementById('trajDirShotCount').textContent = d.trajectory_shot_count;
+    }
+  } catch(_) {}
+}
+
+async function updateDir(key, value) {
+  if (!value.trim()) return;
+  await apiCall('POST', '/api/config/training-dirs', { [key]: value });
+  loadDirs();
+  log(`目录已更新: ${key}=${value}`, 'success');
+}
+
 // ─── Status Refresh ─────────────────────────────────────────
 async function refreshStatus() {
   try {
@@ -521,6 +560,7 @@ function init() {
   // Periodic refresh
   setInterval(refreshStatus, 5000);
   refreshStatus();
+  loadDirs();
 
   // Check annotation count
   fetch('/api/annotate/images').then(r => r.json()).then(images => {
