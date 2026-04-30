@@ -1,23 +1,163 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
-    android:layout_width="match_parent" android:layout_height="match_parent"
-    android:background="#0a0e14" android:padding="16dp">
-    <LinearLayout android:orientation="vertical"
-        android:layout_width="match_parent" android:layout_height="wrap_content">
-        <TextView android:id="@+id/serverInfo" android:text="服务器: ---"
-            android:textColor="#6b7280" android:textSize="12sp" android:layout_marginBottom="4dp"/>
-        <TextView android:id="@+id/statusText" android:text="未连接"
-            android:textColor="#00e5a0" android:textSize="16sp" android:layout_marginBottom="16dp"/>
-        <LinearLayout android:orientation="horizontal" android:layout_marginBottom="16dp">
-            <Button android:id="@+id/btnStart" android:text="启动" android:layout_weight="1"/>
-            <Button android:id="@+id/btnStop" android:text="停止" android:layout_weight="1"/>
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/bg_primary"
+    android:padding="16dp">
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
+
+        <!-- 顶栏：标题 + 连接状态 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginBottom="20dp">
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/app_title"
+                android:textColor="@color/text_primary"
+                android:textSize="22sp"
+                android:fontFamily="sans-serif-medium"/>
+            <TextView
+                android:id="@+id/connectionStatus"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/status_disconnected"
+                android:textColor="@color/text_tertiary"
+                android:textSize="12sp"/>
         </LinearLayout>
-        <TextView android:text="选择模式" android:textColor="#c8ccd4" android:textSize="14sp" android:layout_marginBottom="8dp"/>
-        <Button android:id="@+id/btnMatch" android:text="🏆 比赛模式" android:layout_marginBottom="6dp"
-            style="@style/ModeButton"/>
-        <Button android:id="@+id/btnTraining" android:text="🎯 训练模式" android:layout_marginBottom="6dp"
-            style="@style/ModeButton"/>
-        <Button android:id="@+id/btnChallenge" android:text="⭐ 闯关模式"
-            style="@style/ModeButton"/>
+
+        <!-- 启动/停止按钮 -->
+        <Button
+            android:id="@+id/btnStart"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            style="@style/ButtonPrimary"
+            android:text="@string/btn_start"/>
+        <Button
+            android:id="@+id/btnStop"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            style="@style/ButtonSecondary"
+            android:text="@string/btn_stop"/>
+
+        <!-- 分隔线 -->
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:layout_marginTop="20dp"
+            android:layout_marginBottom="8dp"
+            android:background="@color/border_medium"/>
+
+        <TextView
+            style="@style/Label"
+            android:text="@string/label_mode_select"/>
+
+        <!-- 模式卡片 — LinearLayout可点击, 两行文字 -->
+        <LinearLayout android:id="@+id/cardMatch"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            style="@style/ModeCard"
+            android:orientation="vertical"
+            android:clickable="true"
+            android:focusable="true"
+            android:background="@drawable/card_bg">
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/card_match_title"
+                android:textColor="@color/text_primary"
+                android:textSize="16sp"
+                android:fontFamily="sans-serif-medium"/>
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/card_match_desc"
+                android:textColor="@color/text_secondary"
+                android:textSize="13sp"
+                android:layout_marginTop="4dp"/>
+        </LinearLayout>
+        <LinearLayout android:id="@+id/cardTraining"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            style="@style/ModeCard"
+            android:orientation="vertical"
+            android:clickable="true"
+            android:focusable="true"
+            android:background="@drawable/card_bg">
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/card_training_title"
+                android:textColor="@color/text_primary"
+                android:textSize="16sp"
+                android:fontFamily="sans-serif-medium"/>
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/card_training_desc"
+                android:textColor="@color/text_secondary"
+                android:textSize="13sp"
+                android:layout_marginTop="4dp"/>
+        </LinearLayout>
+        <LinearLayout android:id="@+id/cardChallenge"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            style="@style/ModeCard"
+            android:orientation="vertical"
+            android:clickable="true"
+            android:focusable="true"
+            android:background="@drawable/card_bg">
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/card_challenge_title"
+                android:textColor="@color/text_primary"
+                android:textSize="16sp"
+                android:fontFamily="sans-serif-medium"/>
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/card_challenge_desc"
+                android:textColor="@color/text_secondary"
+                android:textSize="13sp"
+                android:layout_marginTop="4dp"/>
+        </LinearLayout>
+
+        <!-- 分隔线 -->
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:layout_marginTop="16dp"
+            android:layout_marginBottom="8dp"
+            android:background="@color/border_medium"/>
+
+        <TextView
+            style="@style/Label"
+            android:text="@string/label_system_info"/>
+
+        <!-- 系统信息卡片 -->
+        <LinearLayout
+            android:id="@+id/systemInfoCard"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            style="@style/CardBase">
+            <TextView android:id="@+id/infoServer"
+                style="@style/BodySecondary"
+                android:text="服务器: ---"/>
+            <TextView android:id="@+id/infoCamera"
+                style="@style/BodySecondary"
+                android:text="摄像头: ---"/>
+            <TextView android:id="@+id/infoMode"
+                style="@style/BodySecondary"
+                android:text="模式: 空闲"/>
+        </LinearLayout>
     </LinearLayout>
 </ScrollView>
