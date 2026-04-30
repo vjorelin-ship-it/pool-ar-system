@@ -327,6 +327,29 @@ public class InProgressFragment extends Fragment {
         }
     }
 
+    // 重连后刷新状态
+    public void refreshState() {
+        if (!isAdded()) return;
+        ApiClient.getStatus(data -> {
+            if (data != null && isAdded()) {
+                String mode = data.optString("mode", "idle");
+                if (!mode.equals(activeMode)) {
+                    getActivity().runOnUiThread(() -> updateMode(mode));
+                }
+                if ("match".equals(mode)) {
+                    ApiClient.getScore(scoreData -> {
+                        if (scoreData != null && isAdded() && p1Score != null) {
+                            getActivity().runOnUiThread(() -> {
+                                p1Score.setText(String.valueOf(scoreData.optInt("player1_score", 0)));
+                                p2Score.setText(String.valueOf(scoreData.optInt("player2_score", 0)));
+                            });
+                        }
+                    });
+                }
+            }
+        });
+    }
+
     @Override
     public void onDestroyView() {
         super.onDestroyView();

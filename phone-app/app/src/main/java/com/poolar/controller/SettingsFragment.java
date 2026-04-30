@@ -147,6 +147,25 @@ public class SettingsFragment extends Fragment {
         }
     }
 
+    // 重连后刷新校准和模型状态
+    public void refreshState() {
+        if (!isAdded()) return;
+        ApiClient.get("/calibration/status", data -> {
+            if (data != null && isAdded() && calStatus != null) {
+                String status = data.optString("status", "未知");
+                getActivity().runOnUiThread(() -> calStatus.setText("状态: " + status));
+            }
+        });
+        ApiClient.get("/model/status", data -> {
+            if (data != null && isAdded() && modelStatus != null) {
+                int shots = data.optInt("shot_count", 0);
+                boolean trained = data.optBoolean("is_trained", false);
+                getActivity().runOnUiThread(() ->
+                    modelStatus.setText("已采集: " + shots + " 杆 | 模型: " + (trained ? "✅ 已训练" : "未训练")));
+            }
+        });
+    }
+
     @Override
     public void onDestroyView() {
         super.onDestroyView();

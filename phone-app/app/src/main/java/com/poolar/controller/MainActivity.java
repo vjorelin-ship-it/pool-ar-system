@@ -85,11 +85,19 @@ public class MainActivity extends AppCompatActivity implements WebSocketClient.M
     @Override
     public void onConnected() {
         if (homeFragment != null) homeFragment.onWsConnected();
+        // 重连后刷新状态
+        if (inProgressFragment != null) inProgressFragment.refreshState();
+        if (settingsFragment != null) settingsFragment.refreshState();
     }
 
     @Override
     public void onDisconnected() {
         if (homeFragment != null) homeFragment.onWsDisconnected();
+    }
+
+    @Override
+    public void onReconnecting() {
+        if (homeFragment != null) homeFragment.onWsReconnecting();
     }
 
     @Override

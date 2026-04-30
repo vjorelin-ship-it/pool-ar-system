@@ -23,6 +23,7 @@ public class WebSocketClient {
         void onMessage(String type, JsonObject data);
         default void onConnected() {}
         default void onDisconnected() {}
+        default void onReconnecting() {}
     }
 
     public WebSocketClient() {}
@@ -68,6 +69,9 @@ public class WebSocketClient {
                         for (MessageListener l : listeners) l.onDisconnected();
                     });
                     if (shouldReconnect) {
+                        mainHandler.post(() -> {
+                            for (MessageListener l : listeners) l.onReconnecting();
+                        });
                         mainHandler.postDelayed(() -> doConnect(), 3000);
                     }
                 }
@@ -81,6 +85,9 @@ public class WebSocketClient {
         } catch (Exception e) {
             Log.e(TAG, "Connect failed", e);
             if (shouldReconnect) {
+                mainHandler.post(() -> {
+                    for (MessageListener l : listeners) l.onReconnecting();
+                });
                 mainHandler.postDelayed(() -> doConnect(), 3000);
             }
         }

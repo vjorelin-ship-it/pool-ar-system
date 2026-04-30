@@ -222,6 +222,13 @@ public class HomeFragment extends Fragment {
         }
     }
 
+    public void onWsReconnecting() {
+        if (connectionStatus != null) {
+            connectionStatus.setText("🔄 重连中...");
+            connectionStatus.setTextColor(getResources().getColor(R.color.accent));
+        }
+    }
+
     @Override
     public void onDestroyView() {
         super.onDestroyView();
