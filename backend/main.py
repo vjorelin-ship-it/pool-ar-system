@@ -200,6 +200,7 @@ class PoolARSystem:
         # 收集所有进袋球（用于match mode批量处理）
         match_potted = []
         match_foul = False
+        cue_pocketed = False
 
         for ev in events:
             # 1. Broadcast to phone app (per-event)
@@ -276,7 +277,7 @@ class PoolARSystem:
                             f"第{idx+1}/{total}题，请按投影摆球"), self._loop,
                     )
 
-            # 5. Collect potted balls for match mode (processed once after loop)
+            # 5. Collect potted balls and track fouls for match mode
             if current_mode == "match":
                 if ev.is_solid or ev.is_stripe:
                     match_potted.append({
@@ -290,14 +291,32 @@ class PoolARSystem:
                     })
                 if ev.is_cue:
                     match_foul = True
+                    cue_pocketed = True
 
         # 清除训练标记
         self._training_processed = False
 
-        # 6. Match mode: 一次性处理所有进袋球
-        if current_mode == "match" and match_potted:
-            self.match_mode.process_shot(match_potted, match_foul)
+        # 6. Match mode: process shot with full foul detection
+        if current_mode == "match" and (match_potted or match_foul):
+            result = self.match_mode.process_shot(
+                match_potted, is_foul=match_foul,
+                cue_pocketed=match_foul,
+            )
             self.match_mode.save_history()
+
+            # Foul announcement
+            if result.get("foul"):
+                foul_text = self.announcer.foul_announce(
+                    [{"desc": "犯规", "severity": "foul"}])
+                if self._loop:
+                    asyncio.run_coroutine_threadsafe(
+                        manager.broadcast_announce(foul_text), self._loop)
+            if result.get("free_ball"):
+                fb_text = self.announcer.free_ball_announce()
+                if self._loop:
+                    asyncio.run_coroutine_threadsafe(
+                        manager.broadcast_announce(fb_text), self._loop)
+
             if self._loop:
                 asyncio.run_coroutine_threadsafe(
                     manager.broadcast_score(), self._loop,

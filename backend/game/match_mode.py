@@ -11,16 +11,17 @@ class MatchState:
     player2_name: str = ""
     player1_score: int = 0
     player2_score: int = 0
-    current_player: int = 1       # 1 or 2
-    player1_balls: str = ""       # "solids" or "stripes"
+    current_player: int = 1
+    player1_balls: str = ""
     player2_balls: str = ""
     is_break_shot: bool = True
     game_over: bool = False
     winner: int | None = None
     foul: bool = False
+    free_ball: bool = False
+    table_open: bool = True
     shots_this_turn: int = 0
     history: List[dict] = field(default_factory=list)
-    # Track remaining balls per group per player (initialized on assignment)
     p1_remaining: int = 0
     p2_remaining: int = 0
 
@@ -50,77 +51,77 @@ class MatchMode:
             self.state.player2_name = str(args[1])
 
     def process_shot(self, potted_balls: List[Dict[str, Any]],
-                     is_foul: bool = False, is_break: bool = False) -> dict:
-        """处理击球结果
+                     is_foul: bool = False, cue_pocketed: bool = False,
+                     no_ball_hit: bool = False) -> dict:
+        """Process a shot with full foul detection.
 
         Args:
-            potted_balls: 进袋的球列表，每颗球包含:
-                color, is_solid, is_stripe, is_black, is_cue
-            is_foul: 是否犯规
+            potted_balls: list of pocketed balls with {is_solid, is_stripe, is_black, is_cue}
+            is_foul: pre-detected foul (e.g. from vision)
+            cue_pocketed: cue ball went in pocket
+            no_ball_hit: no ball was contacted
 
-        Returns:
-            action: continue / switch_player / assign / win / lose
-            player: current_player
+        Returns action dict.
         """
         s = self.state
 
-        # Set foul flag before break check so _handle_break sees it
-        if is_foul:
-            s.foul = True
+        # Detect all fouls
+        fouls = self.detect_fouls(potted_balls, cue_pocketed=cue_pocketed,
+                                   no_ball_hit=no_ball_hit)
 
-        s.record_shot(potted_balls, is_foul)
+        s.record_shot(potted_balls, is_foul or len(fouls) > 0)
 
-        # 开球处理 - 首颗进球确定球色归属
+        # Break shot
         if s.is_break_shot:
-            return self._handle_break(potted_balls)
-
-        # 犯规处理
-        if is_foul:
+            s.is_break_shot = False
+            if fouls:
+                return self.apply_fouls(fouls)
+            if potted_balls:
+                return self._handle_break(potted_balls)
             s.switch_player()
             return {"action": "switch_player", "player": s.current_player}
 
-        # 有球进袋
+        # Foul handling
+        if fouls:
+            return self.apply_fouls(fouls)
+        if is_foul:
+            s.switch_player()
+            return {"action": "switch_player", "player": s.current_player,
+                    "foul": True}
+
+        # Potted balls
         if potted_balls:
             return self._handle_pot(potted_balls)
 
-        # 未进球 - 换手
+        # Miss
         s.switch_player()
         return {"action": "switch_player", "player": s.current_player}
 
     def _handle_break(self, potted: List[Dict[str, Any]]) -> dict:
-        """Handle break shot — assign ball groups or handle foul."""
+        """Assign ball groups based on first pocketed ball after break."""
         s = self.state
-        # If foul on break, switch player without assigning groups
-        if s.foul:
-            s.is_break_shot = False
-            s.switch_player()
-            s.foul = False
+        s.table_open = False
+        first = potted[0]
+        if first.get("is_solid"):
+            s.player1_balls = "solids"
+            s.player2_balls = "stripes"
+        elif first.get("is_stripe"):
+            s.player1_balls = "stripes"
+            s.player2_balls = "solids"
+        else:
             return {"action": "open_table", "player": s.current_player}
-
-        s.is_break_shot = False
-        if potted:
-            first = potted[0]
-            if first.get("is_solid"):
-                s.player1_balls = "solids"
-                s.player2_balls = "stripes"
-                s.p1_remaining = 7
-                s.p2_remaining = 7
-            elif first.get("is_stripe"):
-                s.player1_balls = "stripes"
-                s.player2_balls = "solids"
-                s.p1_remaining = 7
-                s.p2_remaining = 7
-            return {"action": "assign", "p1": s.player1_balls,
-                    "p2": s.player2_balls, "player": 1}
-        return {"action": "open_table", "player": 1}
+        s.p1_remaining = 7
+        s.p2_remaining = 7
+        return {"action": "assign", "p1": s.player1_balls,
+                "p2": s.player2_balls, "player": s.current_player}
 
     def _handle_pot(self, potted: List[Dict[str, Any]]) -> dict:
         s = self.state
         own_group = s.player1_balls if s.current_player == 1 else s.player2_balls
         opp_group = "stripes" if own_group == "solids" else "solids"
 
+        # Check 8-ball first
         for ball in potted:
-            # 黑8进袋
             if ball.get("is_black"):
                 remaining = self._remaining_of_group(s.current_player)
                 if remaining == 0:
@@ -128,12 +129,13 @@ class MatchMode:
                     s.game_over = True
                     return {"action": "win", "player": s.current_player}
                 else:
-                    # 己方球未清完就打黑8 → 判负
                     s.winner = 2 if s.current_player == 1 else 1
                     s.game_over = True
-                    return {"action": "lose", "player": s.current_player}
+                    return {"action": "lose", "player": s.current_player,
+                            "reason": "early_eight"}
 
-            # 检查是否打进己方球
+        opp_foul = False
+        for ball in potted:
             is_own = (own_group == "solids" and ball.get("is_solid")) or \
                      (own_group == "stripes" and ball.get("is_stripe"))
             is_opp = (opp_group == "solids" and ball.get("is_solid")) or \
@@ -145,60 +147,68 @@ class MatchMode:
                     s.player1_score += 1
                 else:
                     s.player2_score += 1
-
-            # 打进对方球 → 犯规换手
             if is_opp:
-                s.switch_player()
-                return {"action": "switch_player", "player": s.current_player,
-                        "reason": "potted_opponent_ball"}
+                opp_foul = True
 
-        # 正常打进己方球，继续击球
+        if opp_foul:
+            s.switch_player()
+            return {"action": "switch_player", "player": s.current_player,
+                    "foul": True, "reason": "potted_opponent_ball"}
+
         return {"action": "continue", "player": s.current_player}
 
     def _remaining_of_group(self, player: int) -> int:
-        s = self.state
-        return s.p1_remaining if player == 1 else s.p2_remaining
+        return self.state.p1_remaining if player == 1 else self.state.p2_remaining
 
     def _decrement_remaining(self, player: int) -> None:
-        s = self.state
         if player == 1:
-            s.p1_remaining = max(0, s.p1_remaining - 1)
+            self.state.p1_remaining = max(0, self.state.p1_remaining - 1)
         else:
-            s.p2_remaining = max(0, s.p2_remaining - 1)
-
-    def detect_break_shot(self, balls_on_table: int) -> bool:
-        """Detect if this is a break shot (first shot, all 16 balls present)."""
-        if self.state.is_break_shot:
-            self.state.is_break_shot = False
-            return True
-        return False
+            self.state.p2_remaining = max(0, self.state.p2_remaining - 1)
 
     def detect_fouls(self, potted: list, cue_pocketed: bool = False,
-                     played_wrong_ball: bool = False) -> dict:
-        """Detect all foul types from a shot.
-
-        Returns: dict with foul_type and description, or None if no foul.
-        """
+                     no_ball_hit: bool = False) -> list:
+        """Detect all fouls. Returns list of {type, desc, severity}."""
         results = []
-
-        # Cue ball in pocket = foul
+        s = self.state
         if cue_pocketed:
-            results.append({"type": "cue_pocketed", "desc": "白球进袋"})
-
-        # Wrong ball played (hit opponent's ball first)
-        if played_wrong_ball:
-            results.append({"type": "wrong_ball", "desc": "击打对方球"})
-
-        # No ball hit cushion after contact (currently not detectable)
-        # 8-ball pocketed early
+            results.append({"type": "cue_pocketed", "desc": "白球进袋", "severity": "foul"})
+        if no_ball_hit:
+            results.append({"type": "no_hit", "desc": "未命中目标球", "severity": "foul"})
         for b in potted:
-            if b.get("is_black") and self.state.p1_remaining > 0 and self.state.p2_remaining > 0:
-                results.append({"type": "early_eight", "desc": "黑8提前进袋"})
+            if b.get("is_black") and self._remaining_of_group(s.current_player) > 0:
+                results.append({"type": "early_eight", "desc": "黑8提前进袋", "severity": "loss"})
+                break
+        own_group = s.player1_balls if s.current_player == 1 else s.player2_balls
+        if own_group:
+            for b in potted:
+                is_opp = (own_group == "solids" and b.get("is_stripe")) or \
+                         (own_group == "stripes" and b.get("is_solid"))
+                if is_opp:
+                    results.append({"type": "opponent_ball", "desc": "打进对方球", "severity": "foul"})
+                    break
+        return results
 
-        return results[0] if results else None
+    def apply_fouls(self, fouls: list) -> dict:
+        """Apply foul results: switch, free ball, or loss."""
+        s = self.state
+        for f in fouls:
+            if f.get("severity") == "loss":
+                s.winner = 2 if s.current_player == 1 else 1
+                s.game_over = True
+                return {"action": "lose", "player": s.current_player, "reason": f["desc"]}
+        s.switch_player()
+        if any(f.get("type") == "cue_pocketed" for f in fouls):
+            s.free_ball = True
+        return {"action": "switch_player", "player": s.current_player,
+                "foul": True, "free_ball": s.free_ball,
+                "reasons": [f["desc"] for f in fouls]}
+
+    def clear_free_ball(self) -> None:
+        self.state.free_ball = False
+        self.state.foul = False
 
     def save_history(self, path: str = "") -> bool:
-        """Save match history to JSON file."""
         p = path or _os.path.join(_os.path.dirname(__file__), '..', 'learning', 'match_history.json')
         try:
             data = {
@@ -210,7 +220,7 @@ class MatchMode:
                 "game_over": self.state.game_over,
                 "player1_balls": self.state.player1_balls,
                 "player2_balls": self.state.player2_balls,
-                "history": self.state.history[-50:],  # keep last 50 events
+                "history": self.state.history[-50:],
                 "last_updated": _dt.now().isoformat(),
             }
             with open(p, 'w', encoding='utf-8') as f:

@@ -27,6 +27,21 @@ class Announcer:
         name = self._ball_name(color, is_stripe)
         return f"{name}进袋"
 
+    def foul_announce(self, fouls: list) -> str:
+        """Generate foul announcement from foul list."""
+        if not fouls:
+            return ""
+        # Check for loss first
+        for f in fouls:
+            if f.get("severity") == "loss":
+                return f"犯规！{f['desc']}，本局判负！"
+        # Standard foul
+        descs = [f["desc"] for f in fouls]
+        return "犯规！" + "，".join(descs)
+
+    def free_ball_announce(self) -> str:
+        return "自由球，可将白球放在任意位置"
+
     def victory(self, player: int) -> str:
         name = self.p1 if player == 1 else self.p2
         return f"本局{name}获胜！"
