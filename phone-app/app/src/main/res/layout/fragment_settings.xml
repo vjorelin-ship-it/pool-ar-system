@@ -1,34 +1,221 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
-    android:layout_width="match_parent" android:layout_height="match_parent"
-    android:background="#0a0e14" android:padding="16dp">
-    <LinearLayout android:orientation="vertical"
-        android:layout_width="match_parent" android:layout_height="wrap_content">
-        <TextView android:text="服务器设置" android:textColor="#c8ccd4" android:textSize="14sp" android:layout_marginBottom="8dp"/>
-        <EditText android:id="@+id/hostInput" android:hint="IP地址"
-            android:textColor="#c8ccd4" android:layout_marginBottom="4dp"/>
-        <EditText android:id="@+id/portInput" android:hint="端口"
-            android:textColor="#c8ccd4" android:inputType="number" android:layout_marginBottom="8dp"/>
-        <LinearLayout android:orientation="horizontal" android:layout_marginBottom="16dp">
-            <Button android:id="@+id/btnSave" android:text="保存" android:layout_weight="1"/>
-            <Button android:id="@+id/btnDiscover" android:text="自动发现" android:layout_weight="1"/>
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/bg_primary"
+    android:padding="16dp">
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/tab_settings"
+            android:textColor="@color/text_primary"
+            android:textSize="22sp"
+            android:fontFamily="sans-serif-medium"
+            android:layout_marginBottom="20dp"/>
+
+        <!-- 服务器 -->
+        <TextView style="@style/Label" android:text="@string/label_server"/>
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            style="@style/CardBase">
+            <TextView style="@style/BodySecondary" android:text="IP 地址"/>
+            <EditText
+                android:id="@+id/hostInput"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textColor="@color/text_primary"
+                android:textColorHint="@color/text_dim"
+                android:backgroundTint="@color/accent"
+                android:hint="192.168.0.35"
+                android:layout_marginBottom="8dp"/>
+            <TextView style="@style/BodySecondary" android:text="端口"/>
+            <EditText
+                android:id="@+id/portInput"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textColor="@color/text_primary"
+                android:textColorHint="@color/text_dim"
+                android:backgroundTint="@color/accent"
+                android:inputType="number"
+                android:hint="8000"
+                android:layout_marginBottom="12dp"/>
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+                <Button android:id="@+id/btnDiscover"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    style="@style/ButtonSecondary"
+                    android:text="🔍 自动发现"
+                    android:layout_marginEnd="8dp"/>
+                <Button android:id="@+id/btnSave"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    style="@style/ButtonPrimary"
+                    android:text="💾 保存并重连"/>
+            </LinearLayout>
         </LinearLayout>
 
-        <TextView android:text="投影校准" android:textColor="#c8ccd4" android:textSize="14sp" android:layout_marginBottom="8dp"/>
-        <TextView android:id="@+id/calStatus" android:text="未校准" android:textColor="#6b7280" android:textSize="12sp"/>
-        <LinearLayout android:orientation="horizontal" android:layout_marginBottom="16dp">
-            <Button android:id="@+id/btnCalStart" android:text="开始校准" android:layout_weight="1"/>
-            <Button android:id="@+id/btnCalStop" android:text="停止" android:layout_weight="1"/>
+        <!-- 预览 开关 -->
+        <TextView style="@style/Label" android:text="@string/label_preview"/>
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            style="@style/CardBase">
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginBottom="10dp">
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    style="@style/BodyText"
+                    android:text="📷 摄像头预览"/>
+                <Switch
+                    android:id="@+id/toggleCameraPreview"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"/>
+            </LinearLayout>
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    style="@style/BodyText"
+                    android:text="🖥️ 投影预览"/>
+                <Switch
+                    android:id="@+id/toggleProjectorPreview"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"/>
+            </LinearLayout>
         </LinearLayout>
 
-        <TextView android:text="轨迹数据采集" android:textColor="#c8ccd4" android:textSize="14sp" android:layout_marginBottom="8dp"/>
-        <LinearLayout android:orientation="horizontal" android:layout_marginBottom="16dp">
-            <Button android:id="@+id/btnCollectStart" android:text="开始采集" android:layout_weight="1"/>
-            <Button android:id="@+id/btnCollectStop" android:text="停止采集" android:layout_weight="1"/>
+        <!-- 校准 -->
+        <TextView style="@style/Label" android:text="@string/label_calibration"/>
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            style="@style/CardBase">
+            <TextView
+                android:id="@+id/calStatus"
+                style="@style/BodySecondary"
+                android:text="状态: 未校准"
+                android:layout_marginBottom="8dp"/>
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+                <Button android:id="@+id/btnCalStart"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    style="@style/ButtonPrimary"
+                    android:text="开始校准"
+                    android:layout_marginEnd="8dp"/>
+                <Button android:id="@+id/btnCalStop"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    style="@style/ButtonSecondary"
+                    android:text="停止"/>
+            </LinearLayout>
         </LinearLayout>
 
-        <TextView android:text="模型状态" android:textColor="#c8ccd4" android:textSize="14sp" android:layout_marginBottom="8dp"/>
-        <TextView android:id="@+id/modelStatus" android:text="点击查询" android:textColor="#6b7280" android:textSize="12sp"/>
-        <Button android:id="@+id/btnModelStatus" android:text="查询模型状态" android:layout_marginTop="4dp"/>
+        <!-- AI模型 -->
+        <TextView style="@style/Label" android:text="@string/label_model"/>
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            style="@style/CardBase">
+            <TextView
+                android:id="@+id/modelStatus"
+                style="@style/BodySecondary"
+                android:text="已采集: --- 杆 | 模型: ---"
+                android:layout_marginBottom="8dp"/>
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+                <Button android:id="@+id/btnModelTrain"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    style="@style/ButtonSecondary"
+                    android:text="AI 训练"
+                    android:layout_marginEnd="8dp"/>
+                <Button android:id="@+id/btnModelReset"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    style="@style/ButtonSecondary"
+                    android:text="重置模型"/>
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- 默认选手 -->
+        <TextView style="@style/Label" android:text="@string/label_default_players"/>
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            style="@style/CardBase">
+            <TextView style="@style/BodySecondary" android:text="选手一"/>
+            <EditText
+                android:id="@+id/defaultPlayer1"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textColor="@color/text_primary"
+                android:textColorHint="@color/text_dim"
+                android:backgroundTint="@color/accent"
+                android:hint="张三"
+                android:layout_marginBottom="8dp"/>
+            <TextView style="@style/BodySecondary" android:text="选手二"/>
+            <EditText
+                android:id="@+id/defaultPlayer2"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textColor="@color/text_primary"
+                android:textColorHint="@color/text_dim"
+                android:backgroundTint="@color/accent"
+                android:hint="李四"
+                android:layout_marginBottom="8dp"/>
+            <Button
+                android:id="@+id/btnSavePlayers"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                style="@style/ButtonSecondary"
+                android:text="保存默认姓名"/>
+        </LinearLayout>
+
+        <!-- 底部信息 -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="版本 1.0.0"
+            android:textColor="@color/text_dim"
+            android:textSize="11sp"
+            android:gravity="center"
+            android:layout_marginTop="24dp"
+            android:layout_marginBottom="8dp"/>
     </LinearLayout>
 </ScrollView>
