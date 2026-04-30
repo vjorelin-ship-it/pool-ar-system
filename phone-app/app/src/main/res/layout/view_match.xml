@@ -1,0 +1,165 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/bg_primary"
+    android:padding="16dp">
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/match_in_progress"
+            android:textColor="@color/text_primary"
+            android:textSize="18sp"
+            android:fontFamily="sans-serif-medium"
+            android:layout_marginBottom="16dp"/>
+
+        <!-- 双人选手面板 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginBottom="16dp">
+
+            <!-- 选手一 -->
+            <LinearLayout
+                android:id="@+id/player1Card"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:background="@drawable/card_bg"
+                android:padding="12dp"
+                android:layout_marginEnd="6dp">
+                <TextView
+                    android:id="@+id/player1Name"
+                    style="@style/BodyText"
+                    android:text="选手一"/>
+                <TextView
+                    android:id="@+id/player1Score"
+                    style="@style/ScoreNumber"
+                    android:text="0"/>
+                <TextView
+                    android:id="@+id/player1Group"
+                    style="@style/BodySecondary"
+                    android:text="---"/>
+                <TextView
+                    android:id="@+id/player1Indicator"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textColor="@color/accent"
+                    android:textSize="12sp"
+                    android:visibility="gone"
+                    android:text="◀ 击球中"/>
+            </LinearLayout>
+
+            <!-- 选手二 -->
+            <LinearLayout
+                android:id="@+id/player2Card"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:background="@drawable/card_bg"
+                android:padding="12dp"
+                android:layout_marginStart="6dp">
+                <TextView
+                    android:id="@+id/player2Name"
+                    style="@style/BodyText"
+                    android:text="选手二"/>
+                <TextView
+                    android:id="@+id/player2Score"
+                    style="@style/ScoreNumber"
+                    android:text="0"/>
+                <TextView
+                    android:id="@+id/player2Group"
+                    style="@style/BodySecondary"
+                    android:text="---"/>
+                <TextView
+                    android:id="@+id/player2Indicator"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textColor="@color/accent"
+                    android:textSize="12sp"
+                    android:visibility="gone"
+                    android:text="◀ 击球中"/>
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- 金色分割线 -->
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:layout_marginBottom="16dp"
+            android:background="@drawable/divider_gold"/>
+
+        <TextView
+            style="@style/Label"
+            android:text="@string/label_ball_status"/>
+
+        <!-- 球状态面板 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@drawable/card_bg"
+            android:padding="14dp">
+
+            <!-- 纯色球 1-7 -->
+            <LinearLayout
+                android:id="@+id/solidsRow"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center"
+                android:layout_marginBottom="8dp"/>
+
+            <!-- 黑8 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center"
+                android:layout_marginBottom="8dp">
+                <TextView
+                    android:id="@+id/ball8"
+                    android:layout_width="36dp"
+                    android:layout_height="36dp"
+                    android:gravity="center"
+                    android:text="⑧"
+                    android:textColor="@color/text_primary"
+                    android:textSize="16sp"
+                    android:background="@drawable/circle_gray"/>
+            </LinearLayout>
+
+            <!-- 花色球 9-15 -->
+            <LinearLayout
+                android:id="@+id/stripesRow"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center"
+                android:layout_marginBottom="10dp"/>
+
+            <!-- 统计行 -->
+            <TextView
+                android:id="@+id/ballsRemaining"
+                style="@style/BodySecondary"
+                android:gravity="center"/>
+        </LinearLayout>
+
+        <!-- 交换击球按钮 -->
+        <Button
+            android:id="@+id/btnSwitchTurn"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            style="@style/ButtonSecondary"
+            android:text="@string/btn_switch_turn"
+            android:layout_gravity="center"
+            android:layout_marginTop="16dp"/>
+    </LinearLayout>
+</ScrollView>
