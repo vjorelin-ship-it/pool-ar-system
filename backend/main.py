@@ -417,7 +417,9 @@ class PoolARSystem:
 
         for t in targets:
             t_vec = Vec2(t.x, t.y)
-            result = self.physics.find_best_shot(cue_vec, t_vec)
+            result = self.physics.find_best_shot_with_context(
+                cue_vec, t_vec,
+                [Vec2(b.x, b.y) for b in balls if b is not cue_ball and b is not t])
             if result.success:
                 cue_final = None
                 if result.cue_final_pos:
@@ -502,24 +504,47 @@ class PoolARSystem:
         """根据物理引擎结果推荐杆法"""
         if not result.success or not result.cue_final_pos:
             return "中杆"
-        # Use explicit spin info when available
+        # 翻袋/两库标注
+        suffix = ""
+        if getattr(result, 'is_bank_shot', False):
+            tp = result.target_path
+            if len(tp) == 4:  # target→b1→b2→pocket = 两库
+                suffix = "两库翻袋"
+            else:
+                suffix = "翻袋"
+        # 组合球检测：看target_path是否包含目标球以外的球(≥3段且非翻袋)
+        if len(result.target_path) >= 3 and not getattr(result, 'is_bank_shot', False):
+            suffix = "传球"
+        # 旋转/杆法
         if hasattr(result, 'spin_y') and result.spin_y != 0:
             sy = result.spin_y
             sx = abs(result.spin_x) if hasattr(result, 'spin_x') else 0
             if sy > 0.2:
-                suf = "高杆" + ("加塞" if sx > 0.3 else "")
+                tech = "高杆" + ("加塞" if sx > 0.3 else "")
             elif sy < -0.2:
-                suf = "低杆" + ("加塞" if sx > 0.3 else "")
+                tech = "低杆" + ("加塞" if sx > 0.3 else "")
             else:
-                suf = "定杆" + ("加塞" if sx > 0.3 else "")
-            return suf
-        # Fallback to original heuristics
-        # 粗略判断：母球朝目标方向继续前进=高杆，后退=低杆
+                tech = "定杆" + ("加塞" if sx > 0.3 else "")
+            if suffix:
+                tech = tech + "·" + suffix
+            return tech
+        # Fallback: no spin info but has bank/combo suffix
+        if suffix:
+            dx = result.cue_final_pos.x - result.cue_path[0].x
+            dy = result.cue_final_pos.y - result.cue_path[0].y
+            fdx = result.cue_path[-1].x - result.cue_path[0].x
+            fdy = result.cue_path[-1].y - result.cue_path[0].y
+            dot = dx * fdx + dy * fdy
+            if dot > 0.01:
+                return "高杆·" + suffix
+            elif dot < -0.01:
+                return "低杆·" + suffix
+            return "中杆·" + suffix
+        # Original fallback
         dx = result.cue_final_pos.x - result.cue_path[0].x
         dy = result.cue_final_pos.y - result.cue_path[0].y
         fdx = result.cue_path[-1].x - result.cue_path[0].x
         fdy = result.cue_path[-1].y - result.cue_path[0].y
-        # 如果母球停点在击球方向延长线上 → 高杆
         dot = dx * fdx + dy * fdy
         power_norm = result.cue_speed / 0.5
         if dot > 0.01:
