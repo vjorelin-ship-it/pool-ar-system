@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="match_parent"
+    android:background="#0a0e14" android:padding="24dp" android:orientation="vertical"
+    android:gravity="center">
+    <TextView android:id="@+id/modeText" android:text="当前模式: idle"
+        android:textColor="#00e5a0" android:textSize="24sp" android:layout_marginBottom="16dp"/>
+    <TextView android:id="@+id/infoText" android:text="系统空闲中"
+        android:textColor="#c8ccd4" android:textSize="16sp"/>
+</LinearLayout>

@@ -1,273 +1,34 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
-    android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:background="#0d1b2a">
-
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:padding="16dp">
-
-        <!-- Server -->
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="服务器"
-            android:textColor="#555"
-            android:textSize="12sp"
-            android:textStyle="bold"
-            android:layout_marginBottom="8dp" />
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center"
-            android:layout_marginBottom="4dp">
-
-            <EditText
-                android:id="@+id/settings_ip"
-                android:layout_width="0dp"
-                android:layout_height="44dp"
-                android:layout_weight="1"
-                android:text="192.168.0.35"
-                android:textColor="#fff"
-                android:background="#0a1628"
-                android:padding="10dp"
-                android:textSize="14sp" />
-
-            <Button
-                android:id="@+id/btn_reconnect"
-                android:layout_width="wrap_content"
-                android:layout_height="44dp"
-                android:text="重连"
-                android:textSize="13sp"
-                android:backgroundTint="#1565c0" />
+    android:layout_width="match_parent" android:layout_height="match_parent"
+    android:background="#0a0e14" android:padding="16dp">
+    <LinearLayout android:orientation="vertical"
+        android:layout_width="match_parent" android:layout_height="wrap_content">
+        <TextView android:text="服务器设置" android:textColor="#c8ccd4" android:textSize="14sp" android:layout_marginBottom="8dp"/>
+        <EditText android:id="@+id/hostInput" android:hint="IP地址"
+            android:textColor="#c8ccd4" android:layout_marginBottom="4dp"/>
+        <EditText android:id="@+id/portInput" android:hint="端口"
+            android:textColor="#c8ccd4" android:inputType="number" android:layout_marginBottom="8dp"/>
+        <LinearLayout android:orientation="horizontal" android:layout_marginBottom="16dp">
+            <Button android:id="@+id/btnSave" android:text="保存" android:layout_weight="1"/>
+            <Button android:id="@+id/btnDiscover" android:text="自动发现" android:layout_weight="1"/>
         </LinearLayout>
 
-        <TextView
-            android:id="@+id/settings_conn_status"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="未连接"
-            android:textColor="#888"
-            android:textSize="12sp"
-            android:layout_marginBottom="18dp" />
-
-        <!-- Preview Toggles -->
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="预览"
-            android:textColor="#555"
-            android:textSize="12sp"
-            android:textStyle="bold"
-            android:layout_marginBottom="8dp" />
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center_vertical"
-            android:paddingVertical="10dp">
-
-            <TextView
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="📷 摄像头预览"
-                android:textColor="#ccc"
-                android:textSize="14sp" />
-
-            <Button
-                android:id="@+id/btn_toggle_camera"
-                android:layout_width="wrap_content"
-                android:layout_height="36dp"
-                android:text="开启"
-                android:textSize="12sp"
-                android:backgroundTint="#333" />
-
+        <TextView android:text="投影校准" android:textColor="#c8ccd4" android:textSize="14sp" android:layout_marginBottom="8dp"/>
+        <TextView android:id="@+id/calStatus" android:text="未校准" android:textColor="#6b7280" android:textSize="12sp"/>
+        <LinearLayout android:orientation="horizontal" android:layout_marginBottom="16dp">
+            <Button android:id="@+id/btnCalStart" android:text="开始校准" android:layout_weight="1"/>
+            <Button android:id="@+id/btnCalStop" android:text="停止" android:layout_weight="1"/>
         </LinearLayout>
 
-        <ImageView
-            android:id="@+id/camera_preview"
-            android:layout_width="match_parent"
-            android:layout_height="180dp"
-            android:scaleType="fitCenter"
-            android:visibility="gone"
-            android:background="#1a1a2e"
-            android:layout_marginBottom="6dp" />
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center_vertical"
-            android:paddingVertical="10dp">
-
-            <TextView
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="🖥️ 投影预览"
-                android:textColor="#ccc"
-                android:textSize="14sp" />
-
-            <Button
-                android:id="@+id/btn_toggle_projector"
-                android:layout_width="wrap_content"
-                android:layout_height="36dp"
-                android:text="开启"
-                android:textSize="12sp"
-                android:backgroundTint="#333" />
+        <TextView android:text="轨迹数据采集" android:textColor="#c8ccd4" android:textSize="14sp" android:layout_marginBottom="8dp"/>
+        <LinearLayout android:orientation="horizontal" android:layout_marginBottom="16dp">
+            <Button android:id="@+id/btnCollectStart" android:text="开始采集" android:layout_weight="1"/>
+            <Button android:id="@+id/btnCollectStop" android:text="停止采集" android:layout_weight="1"/>
         </LinearLayout>
 
-        <ImageView
-            android:id="@+id/projector_preview"
-            android:layout_width="match_parent"
-            android:layout_height="180dp"
-            android:scaleType="fitCenter"
-            android:visibility="gone"
-            android:background="#1a1a2e"
-            android:layout_marginBottom="6dp" />
-
-        <!-- Calibration -->
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="校准"
-            android:textColor="#555"
-            android:textSize="12sp"
-            android:textStyle="bold"
-            android:layout_marginTop="10dp"
-            android:layout_marginBottom="8dp" />
-
-        <TextView
-            android:id="@+id/calibration_status"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="🎯 校准状态: 未校准"
-            android:textColor="#888"
-            android:textSize="13sp"
-            android:background="#0a1628"
-            android:padding="12dp"
-            android:layout_marginBottom="6dp" />
-
-        <Button
-            android:id="@+id/btn_calibration"
-            android:layout_width="match_parent"
-            android:layout_height="44dp"
-            android:text="🎯 开始校准"
-            android:textSize="14sp"
-            android:backgroundTint="#4a148c"
-            android:layout_marginBottom="18dp" />
-
-        <!-- AI Model -->
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="模型"
-            android:textColor="#555"
-            android:textSize="12sp"
-            android:textStyle="bold"
-            android:layout_marginBottom="8dp" />
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:background="#0a1628"
-            android:padding="12dp"
-            android:layout_marginBottom="6dp">
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:gravity="center_vertical">
-
-                <TextView
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="🧠 AI模型状态"
-                    android:textColor="#ccc"
-                    android:textSize="14sp" />
-
-                <TextView
-                    android:id="@+id/ai_model_status"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="未训练"
-                    android:textColor="#888"
-                    android:textSize="12sp" />
-            </LinearLayout>
-
-            <TextView
-                android:id="@+id/ai_model_stats"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="已采集 0 杆"
-                android:textColor="#888"
-                android:textSize="11sp"
-                android:layout_marginTop="4dp" />
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:gravity="center"
-                android:layout_marginTop="8dp">
-
-                <Button
-                    android:id="@+id/btn_ai_train"
-                    android:layout_width="0dp"
-                    android:layout_height="38dp"
-                    android:layout_weight="1"
-                    android:layout_marginRight="4dp"
-                    android:text="开始AI训练"
-                    android:textSize="12sp"
-                    android:backgroundTint="#1565c0" />
-
-                <Button
-                    android:id="@+id/btn_ai_reset"
-                    android:layout_width="0dp"
-                    android:layout_height="38dp"
-                    android:layout_weight="1"
-                    android:layout_marginLeft="4dp"
-                    android:text="重置模型"
-                    android:textSize="12sp"
-                    android:backgroundTint="#333" />
-            </LinearLayout>
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="AI训练模式会在投影上依次显示标准击球位置，按提示打10杆即可采集初始数据"
-                android:textColor="#555"
-                android:textSize="10sp"
-                android:layout_marginTop="6dp" />
-        </LinearLayout>
-
-        <!-- About -->
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="关于"
-            android:textColor="#555"
-            android:textSize="12sp"
-            android:textStyle="bold"
-            android:layout_marginTop="10dp"
-            android:layout_marginBottom="8dp" />
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="版本: 1.0.0"
-            android:textColor="#888"
-            android:textSize="13sp" />
-
+        <TextView android:text="模型状态" android:textColor="#c8ccd4" android:textSize="14sp" android:layout_marginBottom="8dp"/>
+        <TextView android:id="@+id/modelStatus" android:text="点击查询" android:textColor="#6b7280" android:textSize="12sp"/>
+        <Button android:id="@+id/btnModelStatus" android:text="查询模型状态" android:layout_marginTop="4dp"/>
     </LinearLayout>
 </ScrollView>
