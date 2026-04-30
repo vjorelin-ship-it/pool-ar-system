@@ -16,7 +16,7 @@ from fastapi.middleware.cors import CORSMiddleware
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from config import settings
-from calibration_store import save_calibration, load_calibration, clear_calibration
+from calibration_store import save_calibration, load_calibration
 from api.routes import router, system_state, _system_state_lock
 from api.websocket import manager
 from web.scoreboard_app import router as scoreboard_router
@@ -109,8 +109,7 @@ class PoolARSystem:
             print(f"[Calibration] Loaded saved calibration ({len(cal_data['markers'])} markers)")
         system_state["announcer"] = self.announcer
 
-        from config import settings as _settings
-        if getattr(_settings, 'CAMERA_SOURCE', 'rtsp') == "websocket":
+        if getattr(settings, 'CAMERA_SOURCE', 'rtsp') == "websocket":
             from camera.ws_camera import WebSocketCamera
             self.camera = WebSocketCamera()
             self.camera.start()

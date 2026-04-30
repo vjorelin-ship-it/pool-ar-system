@@ -1,5 +1,4 @@
 from fastapi import APIRouter, HTTPException, Request
-from typing import Optional
 from config import settings
 from pydantic import BaseModel, Field
 
@@ -84,9 +83,6 @@ async def get_table_view():
 
 @router.post("/mode")
 async def set_mode(req: ModeRequest):
-    valid_modes = ["idle", "match", "training", "challenge"]
-    if req.mode not in valid_modes:
-        raise HTTPException(400, f"Invalid mode. Valid: {valid_modes}")
     system_state["current_mode"] = req.mode
     if req.mode == "match" and system_state.get("match_mode"):
         system_state["match_mode"].start_new_match()
@@ -154,7 +150,7 @@ async def select_training_level(req: TrainingLevelRequest):
     # Broadcast drill info via WebSocket to phone clients
     from .websocket import manager
     import asyncio
-    asyncio.ensure_future(manager.broadcast_drill_info(result))
+    asyncio.create_task(manager.broadcast_drill_info(result))
     return result
 
 
@@ -292,7 +288,6 @@ async def camera_upload_websocket(ws: WebSocket):
 
 import os as _os
 import json
-import hashlib
 import shutil
 from config import settings as _settings
 

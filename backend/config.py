@@ -5,7 +5,7 @@ class Settings:
     # Camera
     CAMERA_RTSP_URL: str = os.getenv("CAMERA_RTSP_URL", "")
     CAMERA_FPS: int = 10
-    CAMERA_SOURCE = os.getenv("CAMERA_SOURCE", "rtsp")  # "rtsp" | "websocket"
+    CAMERA_SOURCE: str = os.getenv("CAMERA_SOURCE", "rtsp")  # "rtsp" | "websocket"
 
     # Server
     API_HOST: str = "0.0.0.0"

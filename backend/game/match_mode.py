@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import List, Optional, Dict, Any
+from typing import List, Dict, Any
 import json as _json
 import os as _os
 from datetime import datetime as _dt
@@ -16,7 +16,7 @@ class MatchState:
     player2_balls: str = ""
     is_break_shot: bool = True
     game_over: bool = False
-    winner: Optional[int] = None
+    winner: int | None = None
     foul: bool = False
     shots_this_turn: int = 0
     history: List[dict] = field(default_factory=list)

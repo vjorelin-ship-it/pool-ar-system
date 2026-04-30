@@ -1,5 +1,4 @@
 import json
-import asyncio
 from fastapi import WebSocket, WebSocketDisconnect
 from typing import Set
 from .routes import system_state

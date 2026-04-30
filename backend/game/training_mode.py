@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 from typing import List, Optional, Tuple
-from .training_data import TrainingDrill, get_level, get_all_levels
+from .training_data import TrainingDrill, get_level
 
 
 @dataclass
