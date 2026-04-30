@@ -197,6 +197,28 @@ async def get_ai_train_status():
     return system_state.get("ai_training", {"active": False})
 
 
+# ── Manual screenshot capture for ball ML ──
+
+@router.post("/training/ball-ml/capture")
+async def manual_capture_frame():
+    """手动截取当前摄像头帧，保存到raw目录供后续标注"""
+    import cv2
+    import time
+    cam = system_state.get("camera")
+    if cam is None:
+        raise HTTPException(503, "Camera not available")
+    frame = cam.get_frame()
+    if frame is None or not frame.valid or frame.data is None:
+        raise HTTPException(503, "No valid frame from camera")
+    raw_dir = _get_ball_raw_dir()
+    ts = time.strftime("%Y%m%d_%H%M%S")
+    fname = f"capture_{ts}.jpg"
+    path = _os.path.join(raw_dir, fname)
+    cv2.imwrite(path, frame.data, [cv2.IMWRITE_JPEG_QUALITY, 92])
+    count = _count_files(raw_dir, ".jpg")
+    return {"ok": True, "filename": fname, "raw_count": count}
+
+
 @router.websocket("/ws/phone")
 async def phone_websocket(ws: WebSocket):
     await manager.connect_phone(ws)

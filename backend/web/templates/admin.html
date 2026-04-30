@@ -196,14 +196,16 @@
   <!-- Ball ML Data Collection -->
   <div class="card">
     <div class="card-title">■ 球检测 ML 数据采集</div>
-    <div class="stat-row"><span class="stat-label">自动截帧</span><span class="stat-value" id="aiTrainStatus">未启动</span></div>
-    <div class="stat-row"><span class="stat-label">已标注图片</span><span class="stat-value" id="annotatedCount">—</span></div>
+    <div style="display:flex;gap:16px;margin-bottom:8px;font-size:12px;font-family:var(--mono)">
+      <div style="text-align:center"><div style="color:var(--warn);font-size:22px" id="ballRaw">—</div><div style="color:var(--text-dim);font-size:10px">已截帧</div></div>
+      <div style="text-align:center"><div style="color:var(--info);font-size:22px" id="ballAnnotated">—</div><div style="color:var(--text-dim);font-size:10px">已标注</div></div>
+      <div style="text-align:center"><div style="color:var(--text-dim);font-size:22px" id="ballTrained">—</div><div style="color:var(--text-dim);font-size:10px">已训练</div></div>
+    </div>
     <div class="btn-group">
-      <button class="btn accent" onclick="apiCall('POST','/api/ai-train/start')">▶ 自动截帧</button>
-      <button class="btn danger" onclick="apiCall('POST','/api/ai-train/stop')">■ 停止截帧</button>
+      <button class="btn accent" onclick="captureFrame()">📷 手动截帧</button>
       <button class="btn" onclick="window.open('/annotate','_blank')">✎ 标注工具</button>
     </div>
-    <div style="font-size:10px;color:var(--text-dim);margin-top:6px">自动截帧按间隔保存桌面图片到raw目录，供后续人工标注</div>
+    <div style="font-size:10px;color:var(--text-dim);margin-top:6px">每次点击截取当前摄像头画面到raw目录</div>
   </div>
 
   <!-- Trajectory Data Collection -->
@@ -481,6 +483,14 @@ async function updateDir(key, value) {
   await apiCall('POST', '/api/config/training-dirs', { [key]: value });
   loadDirs();
   log(`目录已更新: ${key}=${value}`, 'success');
+}
+
+async function captureFrame() {
+  const r = await apiCall('POST', '/api/training/ball-ml/capture');
+  if (r && r.ok) {
+    log(`截帧: ${r.filename} (raw共${r.raw_count}张)`, 'success');
+    loadDirs();
+  }
 }
 
 async function dedupRaw() {
