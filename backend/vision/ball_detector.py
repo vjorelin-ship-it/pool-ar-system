@@ -88,11 +88,11 @@ class BallDetector:
         contours, _ = cv2.findContours(white_mask, cv2.RETR_EXTERNAL,
                                        cv2.CHAIN_APPROX_SIMPLE)
         candidates = []
-        EXPECTED_R = 12.0  # expected ball radius in 1200px-wide table
+        EXPECTED_R = 16.0  # expected ball radius in 1600px-wide table (2K camera)
 
         for cnt in contours:
             area = cv2.contourArea(cnt)
-            if area < 200 or area > 1200:
+            if area < 350 or area > 2100:
                 continue
             peri = cv2.arcLength(cnt, True)
             if peri < 1:

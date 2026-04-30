@@ -17,7 +17,7 @@ class TableDetector:
     BLUE_LOWER = np.array([95, 30, 20])
     BLUE_UPPER = np.array([130, 255, 255])
 
-    def __init__(self, target_width: int = 1200, target_height: int = 600):
+    def __init__(self, target_width: int = 1600, target_height: int = 800):
         self._target_size = (target_width, target_height)
 
     def detect(self, frame: cv2.Mat) -> bool:
