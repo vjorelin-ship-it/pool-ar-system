@@ -626,7 +626,15 @@ class PoolARSystem:
 
     def _vision_loop(self) -> None:
         frame_counter = 0
+        PROJECTION_FPS = 15      # target FPS for projection rendering
+        IDLE_FPS = 10            # target FPS when idle
+        proj_interval = 1.0 / PROJECTION_FPS
+        idle_interval = 1.0 / IDLE_FPS
+        last_proj_time = 0.0
+        last_idle_time = 0.0
+
         while self._running:
+            loop_start = time.time()
             has_projector = self._loop and manager.has_projector_clients()
             has_preview = self._loop and manager.has_camera_preview_clients()
             # Read calibration state under lock
@@ -654,7 +662,7 @@ class PoolARSystem:
                             b64 = base64.b64encode(buf.tobytes()).decode("utf-8")
                         else:
                             # Watermark: ball detection not trained
-                            h, w = warped.shape[:2] if warped is not None else (600, 1200)
+                            h, w = warped.shape[:2] if warped is not None else (800, 1600)
                             watermarked = warped.copy() if warped is not None else \
                                 np.zeros((h, w, 3), dtype=np.uint8)
                             cv2.putText(watermarked, "Ball detection model not trained",
@@ -679,14 +687,13 @@ class PoolARSystem:
                         cue_speed = self.speed_detector.update_with_balls(balls)
                         if cue_speed is not None and cue_speed > 0:
                             system_state["table_state"]["last_cue_speed"] = cue_speed
-                            # Record speed in data collector for last shot
                             print(f"[Speed] Cue speed: {cue_speed} m/s")
 
                         # Update system state
                         system_state["table_state"]["detected"] = True
                         system_state["table_state"]["ball_count"] = len(balls)
 
-                        # Broadcast table state to phone clients (for top-down view)
+                        # Broadcast table state to phone clients
                         if self._loop:
                             asyncio.run_coroutine_threadsafe(
                                 manager.broadcast_table_state(), self._loop,
@@ -700,27 +707,37 @@ class PoolARSystem:
                 time.sleep(1.0)
                 continue
 
-            # Render projection
+            # Render projection at target FPS
             if has_projector:
-                try:
-                    ai = system_state.get("ai_training", {})
-                    if ai.get("active"):
-                        image_b64 = self._render_ai_training()
-                    else:
-                        ball_objects = system_state["table_state"].get("ball_objects", [])
-                        image_b64 = self._compute_and_render_shot(None, ball_objects)
-                    n_sent = asyncio.run_coroutine_threadsafe(
-                        manager.broadcast_projection(image_b64), self._loop,
-                    )
-                    # Log every ~2s whether projection was sent
-                    if frame_counter % 7 == 0:
-                        print(f"[Projection] Sent frame (clients: {len(manager._projector_clients)})")
-                except Exception as e:
-                    import traceback
-                    traceback.print_exc()
-                time.sleep(0.3)
+                elapsed = time.time() - last_proj_time
+                if elapsed >= proj_interval:
+                    try:
+                        ai = system_state.get("ai_training", {})
+                        if ai.get("active"):
+                            image_b64 = self._render_ai_training()
+                        else:
+                            ball_objects = system_state["table_state"].get("ball_objects", [])
+                            image_b64 = self._compute_and_render_shot(None, ball_objects)
+                        asyncio.run_coroutine_threadsafe(
+                            manager.broadcast_projection(image_b64), self._loop,
+                        )
+                        last_proj_time = time.time()
+                        if frame_counter % 100 == 0:
+                            print(f"[Projection] FPS: {PROJECTION_FPS} "
+                                  f"(clients: {len(manager._projector_clients)})")
+                    except Exception as e:
+                        import traceback
+                        traceback.print_exc()
+
+                # Sleep to maintain target rate
+                remain = proj_interval - (time.time() - loop_start)
+                if remain > 0.001:
+                    time.sleep(remain)
             else:
-                time.sleep(0.1)
+                elapsed = time.time() - last_idle_time
+                if elapsed < idle_interval:
+                    time.sleep(idle_interval - elapsed)
+                last_idle_time = time.time()
 
     @staticmethod
     def _get_local_ip() -> str:
