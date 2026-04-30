@@ -1,0 +1,121 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/bg_primary"
+    android:padding="16dp">
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
+
+        <!-- 顶栏：返回 + 档位名 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginBottom="16dp">
+            <Button
+                android:id="@+id/btnBackToLevels"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                style="@style/ButtonSecondary"
+                android:text="← 返回选关"
+                android:textSize="12sp"
+                android:minHeight="36dp"
+                android:padding="8dp"/>
+            <TextView
+                android:id="@+id/levelNameText"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="---"
+                android:textColor="@color/text_primary"
+                android:textSize="16sp"
+                android:gravity="end"/>
+        </LinearLayout>
+
+        <!-- 训练进度 -->
+        <TextView style="@style/Label" android:text="@string/label_drill_progress"/>
+        <TextView
+            android:id="@+id/drillProgressText"
+            style="@style/BodyText"
+            android:text="第 1 题 / 共 5 题"
+            android:layout_marginBottom="8dp"/>
+        <ProgressBar
+            android:id="@+id/progressBar"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="match_parent"
+            android:layout_height="4dp"
+            android:progressTint="@color/accent"
+            android:progressBackgroundTint="@color/border_medium"
+            android:progress="40"/>
+
+        <!-- 摆球要求 -->
+        <TextView style="@style/Label" android:text="@string/label_placement"/>
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            style="@style/CardBase">
+            <TextView android:id="@+id/cuePosText" style="@style/BodyText" android:text="● 白球: ---"/>
+            <TextView android:id="@+id/targetPosText" style="@style/BodyText" android:text="○ 目标球: ---"/>
+            <TextView android:id="@+id/pocketPosText" style="@style/BodyText" android:text="◎ 目标袋: ---"/>
+            <TextView android:id="@+id/techniqueText" style="@style/BodySecondary" android:text="📝 ---"/>
+        </LinearLayout>
+
+        <!-- 摆球验证 -->
+        <TextView style="@style/Label" android:text="@string/label_placement_verify"/>
+        <TextView
+            android:id="@+id/placementStatusText"
+            style="@style/BodyText"
+            android:text="⏳ 等待摆球..."
+            android:background="@drawable/card_bg"
+            android:padding="12dp"/>
+
+        <!-- 推荐击球 -->
+        <TextView style="@style/Label" android:text="@string/label_shot_recommend"/>
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            style="@style/CardBase">
+            <TextView android:id="@+id/cueTypeText" style="@style/BodyText" android:text="杆法: ---"/>
+            <TextView android:id="@+id/powerText" style="@style/BodyText" android:text="力度: ---"/>
+            <TextView android:id="@+id/cueLandingText" style="@style/BodySecondary" android:text="走位: ---"/>
+        </LinearLayout>
+
+        <!-- 击球结果 -->
+        <TextView style="@style/Label" android:text="@string/label_shot_result"/>
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            style="@style/CardBase">
+            <TextView
+                android:id="@+id/shotResultText"
+                style="@style/BodyText"
+                android:text="⏳ 等待击球..."/>
+            <TextView
+                android:id="@+id/shotFeedbackText"
+                style="@style/BodySecondary"
+                android:visibility="gone"/>
+        </LinearLayout>
+
+        <!-- 闯关进度 -->
+        <TextView style="@style/Label" android:text="@string/label_challenge_progress"/>
+        <TextView
+            android:id="@+id/consecutiveText"
+            style="@style/BodyText"
+            android:text="🔥 连续成功 0 次"/>
+        <TextView
+            android:id="@+id/bestRecordText"
+            style="@style/BodySecondary"
+            android:text="本关最高: 0 次"/>
+        <TextView
+            android:id="@+id/totalProgressText"
+            style="@style/BodySecondary"
+            android:text="总进度: 0%"/>
+    </LinearLayout>
+</ScrollView>
