@@ -41,14 +41,37 @@
   .ball-section { margin-top: 24px; }
   .ball-section .label { font-size: 1.1rem; color: #888; margin-bottom: 8px; }
   .ball-grid {
-    display: inline-flex; flex-direction: column; align-items: center; gap: 6px;
-    padding: 16px 24px; background: #0a1628; border-radius: 12px;
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    gap: 8px;
+    padding: 16px;
+    max-width: 600px;
+    margin: 0 auto;
   }
-  .ball-row { display: flex; gap: 8px; justify-content: center; }
-  .ball-cell { width: 48px; height: 48px; border-radius: 50%; display: inline-block; transition: opacity 0.3s; }
-  .ball-cell img { width: 48px; height: 48px; display: block; }
-  .ball-cell.dim { opacity: 0.2; }
-  .ball-summary { font-size: 1rem; color: #81c784; margin-top: 6px; }
+  .ball-cell {
+    width: 48px; height: 48px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px; font-weight: bold; color: #fff;
+    transition: opacity 0.3s, filter 0.3s;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+  }
+  .ball-cell.pocketed { opacity: 0.18; filter: grayscale(0.8); }
+  .ball-cell.cue-ball { border: 3px solid #ffd700; background: #f8f8f0; color: #333; }
+  .ball-cell.solid-1 { background: #f5d742; }
+  .ball-cell.solid-2 { background: #2244aa; }
+  .ball-cell.solid-3 { background: #dd3333; }
+  .ball-cell.solid-4 { background: #7722aa; }
+  .ball-cell.solid-5 { background: #ee6611; }
+  .ball-cell.solid-6 { background: #228844; }
+  .ball-cell.solid-7 { background: #884422; }
+  .ball-cell.eight { background: #111; border: 2px solid #555; }
+  .ball-cell.stripe-9 { background: linear-gradient(135deg, #f5d742 50%, #fff 50%); color: #333; }
+  .ball-cell.stripe-10 { background: linear-gradient(135deg, #2244aa 50%, #fff 50%); }
+  .ball-cell.stripe-11 { background: linear-gradient(135deg, #dd3333 50%, #fff 50%); }
+  .ball-cell.stripe-12 { background: linear-gradient(135deg, #7722aa 50%, #fff 50%); }
+  .ball-cell.stripe-13 { background: linear-gradient(135deg, #ee6611 50%, #fff 50%); color: #333; }
+  .ball-cell.stripe-14 { background: linear-gradient(135deg, #228844 50%, #fff 50%); }
+  .ball-cell.stripe-15 { background: linear-gradient(135deg, #884422 50%, #fff 50%); }
 
   #connectionDot {
     display: inline-block; width: 14px; height: 14px; border-radius: 50%;
@@ -98,61 +121,16 @@
 </div>
 
 <script>
-// ─── Realistic ball images via Canvas ────────────────────────────
-const ballDataURLs = {};
-(function() {
-  const colors = {
-    1:'#f6c445',2:'#1a4a9e',3:'#d32f2f',4:'#7b1fa2',
-    5:'#f57c00',6:'#388e3c',7:'#5d4037',
-    8:'#111111',
-    9:'#f6c445',10:'#1a4a9e',11:'#d32f2f',12:'#7b1fa2',
-    13:'#f57c00',14:'#388e3c',15:'#5d4037'
-  };
-  for (let n = 1; n <= 15; n++) {
-    const c = document.createElement('canvas');
-    c.width = 80; c.height = 80;
-    const ctx = c.getContext('2d');
-    const cx = 40, cy = 40, r = 36;
+// ─── Ball status grid ──────────────────────────────────────────────
+const BALL_COLORS = [
+  null, // 0 unused
+  'solid-1', 'solid-2', 'solid-3', 'solid-4', 'solid-5', 'solid-6', 'solid-7',
+  'eight',
+  'stripe-9', 'stripe-10', 'stripe-11', 'stripe-12', 'stripe-13', 'stripe-14', 'stripe-15',
+];
+const BALL_LABELS = [null,'1','2','3','4','5','6','7','8','9','10','11','12','13','14','15'];
 
-    const grd = ctx.createRadialGradient(cx, cy, r-2, cx, cy, r+4);
-    grd.addColorStop(0, 'rgba(255,255,255,0.1)'); grd.addColorStop(1, 'rgba(0,0,0,0.3)');
-    ctx.beginPath(); ctx.arc(cx, cy, r+4, 0, Math.PI*2);
-    ctx.fillStyle = grd; ctx.fill();
-
-    if (n >= 9) {
-      ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2);
-      ctx.fillStyle = '#f5f0e8'; ctx.fill();
-      ctx.save();
-      ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2); ctx.clip();
-      ctx.fillStyle = colors[n];
-      ctx.fillRect(cx - r, cy - r*0.35, r*2, r*0.7);
-      ctx.restore();
-    } else {
-      ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2);
-      ctx.fillStyle = colors[n]; ctx.fill();
-    }
-    ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2);
-    ctx.strokeStyle = 'rgba(0,0,0,0.3)'; ctx.lineWidth = 1; ctx.stroke();
-
-    const nr = 13;
-    ctx.beginPath(); ctx.arc(cx, cy, nr, 0, Math.PI*2);
-    ctx.fillStyle = '#fff'; ctx.fill();
-    ctx.strokeStyle = 'rgba(0,0,0,0.15)'; ctx.lineWidth = 1; ctx.stroke();
-    ctx.fillStyle = '#111'; ctx.font = 'bold 16px Arial';
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText(String(n), cx, cy + 0.5);
-
-    const g2 = ctx.createRadialGradient(cx - r*0.3, cy - r*0.3, 2, cx - r*0.2, cy - r*0.2, r*0.7);
-    g2.addColorStop(0, 'rgba(255,255,255,0.5)'); g2.addColorStop(1, 'rgba(255,255,255,0)');
-    ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2);
-    ctx.fillStyle = g2; ctx.fill();
-
-    ballDataURLs[n] = c.toDataURL();
-  }
-})();
-
-// ─── Ball number mapping ───────────────────────────────────────────
-// color + solid/stripe → ball number
+// color + solid/stripe → ball number (used for status messages)
 const SOLID_NUM = { yellow:1, blue:2, red:3, purple:4, orange:5, green:6, brown:7 };
 const STRIPE_NUM = { yellow:9, blue:10, red:11, purple:12, orange:13, green:14, brown:15 };
 
@@ -163,20 +141,31 @@ function ballNumber(color, isSolid, isStripe) {
   return SOLID_NUM[color] || 0;
 }
 
-function renderBallGrid(pocketedSet) {
-  const rows = [[1,2,3,4,5,6,7], [8], [9,10,11,12,13,14,15]];
-  return rows.map(row =>
-    '<div class="ball-row">' + row.map(n => {
-      const dim = pocketedSet.has(n) ? 'dim' : '';
-      return `<span class="ball-cell ${dim}"><img src="${ballDataURLs[n]}"></span>`;
-    }).join('') + '</div>'
-  ).join('');
+let pocketedBalls = [];
+
+function renderBallGrid(pocketed) {
+  const grid = document.getElementById('ballGrid');
+  if (!grid) return '';
+  let html = '';
+  // Cue ball
+  const cueIn = pocketed.some(b => b && b.is_cue);
+  html += `<div class="ball-cell cue-ball${cueIn ? ' pocketed' : ''}">C</div>`;
+  // Balls 1-15
+  for (let i = 1; i <= 15; i++) {
+    const inPocket = pocketed.some(b => {
+      if (i === 8) return b && b.is_black;
+      if (i <= 7) return b && b.is_solid;
+      return b && b.is_stripe;
+    });
+    const cls = 'ball-cell ' + BALL_COLORS[i];
+    html += `<div class="${cls}${inPocket ? ' pocketed' : ''}">${BALL_LABELS[i]}</div>`;
+  }
+  grid.innerHTML = html;
 }
 
 // ─── WebSocket ────────────────────────────────────────────────────
 let ws = null;
 let reconnectTimer = null;
-let pocketedBalls = new Set();
 
 function connectWS() {
   if (ws) try { ws.close(); } catch(e) {}
@@ -222,20 +211,18 @@ function connectWS() {
         document.getElementById('trainingSection').style.display = 'none';
       }
 
-      if (msg.type === 'pocket_event') {
+      if (msg.type === 'pocket_event' && msg.data) {
         const d = msg.data;
-        // Use is_solid/is_stripe for unambiguous ball number
-        const num = ballNumber(d.color, d.is_solid, d.is_stripe);
+        pocketedBalls.push(msg.data);
+        renderBallGrid(pocketedBalls);
+        document.getElementById('ballSection').style.display = 'block';
         if (d.is_cue) {
           document.getElementById('status').textContent = '犯规！白球进袋';
-        } else if (num) {
-          document.getElementById('status').textContent = num + '号球进袋';
-          pocketedBalls.add(num);
-          const grid = document.getElementById('ballGrid');
-          const remaining = Math.max(0, 15 - pocketedBalls.size);
-          grid.innerHTML = renderBallGrid(pocketedBalls) +
-            '<div class="ball-summary">台面剩余 ' + remaining + ' 颗球</div>';
-          document.getElementById('ballSection').style.display = 'block';
+        } else {
+          const num = ballNumber(d.color, d.is_solid, d.is_stripe);
+          if (num) {
+            document.getElementById('status').textContent = num + '号球进袋';
+          }
         }
       }
 
@@ -245,11 +232,9 @@ function connectWS() {
           titleEl.innerHTML =
             `<span id="connectionDot" class="connected"></span> 台球AR投影系统 - <span id="modeLabel">已连接</span>`;
         }
-        if (msg.data && msg.data.balls && msg.data.balls.length > 0) {
+        if (msg.data && msg.data.balls) {
           document.getElementById('ballSection').style.display = 'block';
-          document.getElementById('ballGrid').innerHTML =
-            renderBallGrid(pocketedBalls) +
-            '<div class="ball-summary">台面 ' + msg.data.balls.length + ' 颗球</div>';
+          renderBallGrid(pocketedBalls);
         }
       }
 

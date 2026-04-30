@@ -37,11 +37,11 @@ class MatchMode:
     def __init__(self):
         self.state = MatchState()
 
-    def start_new_match(self) -> None:
+    def start_new_match(self, *args) -> None:
         self.state = MatchState()
 
     def process_shot(self, potted_balls: List[Dict[str, Any]],
-                     is_foul: bool = False) -> dict:
+                     is_foul: bool = False, is_break: bool = False) -> dict:
         """处理击球结果
 
         Args:
@@ -156,3 +156,34 @@ class MatchMode:
             s.p1_remaining = max(0, s.p1_remaining - 1)
         else:
             s.p2_remaining = max(0, s.p2_remaining - 1)
+
+    def detect_break_shot(self, balls_on_table: int) -> bool:
+        """Detect if this is a break shot (first shot, all 16 balls present)."""
+        if self.state.is_break_shot:
+            self.state.is_break_shot = False
+            return True
+        return False
+
+    def detect_fouls(self, potted: list, cue_pocketed: bool = False,
+                     played_wrong_ball: bool = False) -> dict:
+        """Detect all foul types from a shot.
+
+        Returns: dict with foul_type and description, or None if no foul.
+        """
+        results = []
+
+        # Cue ball in pocket = foul
+        if cue_pocketed:
+            results.append({"type": "cue_pocketed", "desc": "白球进袋"})
+
+        # Wrong ball played (hit opponent's ball first)
+        if played_wrong_ball:
+            results.append({"type": "wrong_ball", "desc": "击打对方球"})
+
+        # No ball hit cushion after contact (currently not detectable)
+        # 8-ball pocketed early
+        for b in potted:
+            if b.get("is_black") and self.state.p1_remaining > 0 and self.state.p2_remaining > 0:
+                results.append({"type": "early_eight", "desc": "黑8提前进袋"})
+
+        return results[0] if results else None
