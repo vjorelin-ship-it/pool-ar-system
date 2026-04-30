@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_title">POOL·AR</string>
+    <string name="tab_home">主页</string>
+    <string name="tab_progress">进行中</string>
+    <string name="tab_settings">设置</string>
+
+    <string name="btn_start">▶ 启动系统</string>
+    <string name="btn_stop">■ 停止系统</string>
+    <string name="btn_switch_turn">🔄 交换击球</string>
+
+    <string name="label_mode_select">模式选择</string>
+    <string name="label_system_info">系统信息</string>
+    <string name="label_server">服务器</string>
+    <string name="label_preview">预览</string>
+    <string name="label_calibration">校准</string>
+    <string name="label_model">模型</string>
+    <string name="label_default_players">默认选手</string>
+
+    <string name="card_match_title">🏆 比赛模式</string>
+    <string name="card_match_desc">双人轮流击球，自动计分</string>
+    <string name="card_training_title">🎯 训练模式</string>
+    <string name="card_training_desc">10档难度，50道标准训练题</string>
+    <string name="card_challenge_title">⭐ 闯关模式</string>
+    <string name="card_challenge_desc">连续成功3次晋级下一关</string>
+
+    <string name="match_in_progress">🏆 比赛进行中</string>
+    <string name="training_in_progress">训练进行中</string>
+    <string name="label_ball_status">球状态</string>
+    <string name="label_drill_progress">训练进度</string>
+    <string name="label_placement">摆球要求</string>
+    <string name="label_placement_verify">摆球验证</string>
+    <string name="label_shot_recommend">推荐击球</string>
+    <string name="label_shot_result">击球结果</string>
+    <string name="label_challenge_progress">闯关进度</string>
+
+    <string name="status_connected">⚡ 已连接</string>
+    <string name="status_disconnected">已断开</string>
+
+    <string name="dialog_match_title">🏆 比赛选手</string>
+    <string name="hint_player1">选手一</string>
+    <string name="hint_player2">选手二</string>
+    <string name="save_as_default">保存为默认</string>
+    <string name="btn_start_match">开始比赛</string>
+
+    <string name="dialog_level_title">选择训练关卡</string>
+</resources>
