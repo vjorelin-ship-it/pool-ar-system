@@ -196,26 +196,27 @@
   <!-- Ball ML Data Collection -->
   <div class="card">
     <div class="card-title">■ 球检测 ML 数据采集</div>
+    <div class="stat-row"><span class="stat-label">自动截帧</span><span class="stat-value" id="aiTrainStatus">未启动</span></div>
     <div class="stat-row"><span class="stat-label">已标注图片</span><span class="stat-value" id="annotatedCount">—</span></div>
-    <div class="stat-row"><span class="stat-label">AI训练状态</span><span class="stat-value" id="aiTrainStatus">—</span></div>
     <div class="btn-group">
-      <button class="btn accent" onclick="apiCall('POST','/api/ai-train/start')">▶ AI姿势采集</button>
-      <button class="btn danger" onclick="apiCall('POST','/api/ai-train/stop')">■ 停止</button>
+      <button class="btn accent" onclick="apiCall('POST','/api/ai-train/start')">▶ 自动截帧</button>
+      <button class="btn danger" onclick="apiCall('POST','/api/ai-train/stop')">■ 停止截帧</button>
       <button class="btn" onclick="window.open('/annotate','_blank')">✎ 标注工具</button>
     </div>
-    <div style="font-size:10px;color:var(--text-dim);margin-top:6px">AI训练模式会在投影上显示标准击球位置，按提示击球采集数据</div>
+    <div style="font-size:10px;color:var(--text-dim);margin-top:6px">自动截帧按间隔保存桌面图片到raw目录，供后续人工标注</div>
   </div>
 
   <!-- Trajectory Data Collection -->
   <div class="card">
     <div class="card-title">■ 轨迹数据采集</div>
-    <div class="stat-row"><span class="stat-label">状态</span><span class="stat-value" id="trajColState">—</span></div>
+    <div class="stat-row"><span class="stat-label">后台录制</span><span class="stat-value" id="trajColState">已停止</span></div>
     <div class="stat-row"><span class="stat-label">已采集</span><span class="stat-value green" id="trajColCount">0</span> 杆</div>
     <div class="stat-row"><span class="stat-label">录制中</span><span class="stat-value" id="trajRecording">—</span></div>
     <div class="btn-group">
-      <button class="btn accent" onclick="apiCall('POST','/api/collector/start')">▶ 开始采集</button>
-      <button class="btn danger" onclick="apiCall('POST','/api/collector/stop')">■ 停止采集</button>
+      <button class="btn accent" onclick="apiCall('POST','/api/collector/start')">▶ 后台录制</button>
+      <button class="btn danger" onclick="apiCall('POST','/api/collector/stop')">■ 停止录制</button>
     </div>
+    <div style="font-size:10px;color:var(--text-dim);margin-top:4px">打球时静默录制每杆轨迹，存入new目录</div>
   </div>
 
   <!-- Trajectory Model Training -->
