@@ -34,6 +34,7 @@ from learning.data_collector import DataCollector
 from learning.physics_adapter import PhysicsAdapter
 from learning.diffusion_model import DiffusionTrajectoryModel
 from learning.trajectory_collector import TrajectoryCollector
+from learning.correction_model import CorrectionModel
 MODEL_PATH = os.path.join(os.path.dirname(__file__), 'learning', 'balls.pt')
 
 
@@ -56,6 +57,7 @@ class PoolARSystem:
         self.trajectory_model = DiffusionTrajectoryModel()
         self.trajectory_collector = TrajectoryCollector(
             save_dir=settings.TRAJECTORY_DATA_DIR)
+        self.correction_model = CorrectionModel()
         self._use_ai_trajectory = False
         self._running = False
         self._vision_thread: Optional[threading.Thread] = None
@@ -74,6 +76,19 @@ class PoolARSystem:
                   f"({self.trajectory_model.get_param_count():,} params)")
         else:
             print("[Model] No diffusion model found, using physics engine")
+
+        # Auto-load correction model if available
+        cm_path = os.path.join(os.path.dirname(__file__), 'learning', 'correction_model.pt')
+        if self.correction_model.load(cm_path):
+            print("[Model] Correction model loaded")
+        else:
+            print("[Model] No correction model found, using pure physics")
+
+        # Restore match/training state from disk
+        if self.match_mode.load_history():
+            print("[System] Restored match state from history")
+        if self.training_mode.load_history():
+            print("[System] Restored training state from history")
 
         # Load ML ball detector if available
         try:

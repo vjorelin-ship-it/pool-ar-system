@@ -169,6 +169,28 @@ class TrainingMode:
         except Exception:
             return False
 
+    def load_history(self, path: str = "") -> bool:
+        """Load training history from disk. Returns True if history was loaded."""
+        import json as _json
+        import os as _os
+        p = path or _os.path.join(_os.path.dirname(__file__), '..', 'learning', 'training_history.json')
+        try:
+            if not _os.path.exists(p):
+                return False
+            with open(p, 'r', encoding='utf-8') as f:
+                data = _json.load(f)
+            self.session.current_level = data.get("current_level", 1)
+            self.session.current_drill_idx = data.get("current_drill", 0)
+            self.session.consecutive_successes = data.get("consecutive_successes", 0)
+            self.session.total_attempts = data.get("total_attempts", 0)
+            self.session.total_successes = data.get("total_successes", 0)
+            self.session.completed_levels = data.get("completed_levels", [])
+            self.session.unlocked_levels = data.get("unlocked_levels", [1])
+            self.session.challenge_mode = data.get("challenge_mode", False)
+            return True
+        except Exception:
+            return False
+
     @staticmethod
     def _is_in_landing_zone(pos: Tuple[float, float],
                             zone: Tuple[float, float, float, float]) -> bool:

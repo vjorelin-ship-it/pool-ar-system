@@ -228,3 +228,23 @@ class MatchMode:
             return True
         except Exception:
             return False
+
+    def load_history(self, path: str = "") -> bool:
+        """Load match history from disk. Returns True if history was loaded."""
+        p = path or _os.path.join(_os.path.dirname(__file__), '..', 'learning', 'match_history.json')
+        try:
+            if not _os.path.exists(p):
+                return False
+            with open(p, 'r', encoding='utf-8') as f:
+                data = _json.load(f)
+            self.state.player1_name = data.get("player1_name", "选手一")
+            self.state.player2_name = data.get("player2_name", "选手二")
+            self.state.player1_score = data.get("player1_score", 0)
+            self.state.player2_score = data.get("player2_score", 0)
+            self.state.player1_balls = data.get("player1_balls", "")
+            self.state.player2_balls = data.get("player2_balls", "")
+            self.state.game_over = data.get("game_over", False)
+            self.state.winner = data.get("winner", None)
+            return True
+        except Exception:
+            return False

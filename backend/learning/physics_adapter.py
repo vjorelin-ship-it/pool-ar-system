@@ -80,6 +80,7 @@ class PhysicsAdapter:
         adjustment = error * self._lr * 0.3  # 保守更新
         new_val = self.params.cushion_restitution * (1 + adjustment)
         self._clamp_and_set("cushion_restitution", new_val)
+        self.save()
 
     def update_from_roll_distance(self, expected_dist: float,
                                    actual_dist: float) -> None:
@@ -92,6 +93,7 @@ class PhysicsAdapter:
         adjustment = error * self._lr * 0.2
         new_val = self.params.ball_friction * (1 - adjustment)
         self._clamp_and_set("ball_friction", new_val)
+        self.save()
 
     def update_from_pocket(self, pocket_idx: int,
                             is_hit: bool) -> None:
@@ -112,6 +114,7 @@ class PhysicsAdapter:
             # 球弹出→袋口可能比预想小，略减半径
             new_val = current * (1 - self._lr * 0.1)
         self._clamp_and_set(key, new_val)
+        self.save()
 
     def get_adjusted_params(self) -> PhysicsParams:
         return self.params

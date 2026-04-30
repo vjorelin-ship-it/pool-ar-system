@@ -70,6 +70,7 @@ class DataCollector:
         shot.shot_id = self._next_id
         self._next_id += 1
         self._records.append(shot)
+        self.save()  # incremental save after each shot
 
     def get_all(self) -> List[ShotRecord]:
         """获取全部记录"""
