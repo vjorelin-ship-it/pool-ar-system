@@ -44,6 +44,9 @@ class ShotResult:
     cue_final_pos: Optional[Vec2] = None
     is_bank_shot: bool = False    # Whether this is a bank shot
     bounce_point: Optional[Vec2] = None  # Cushion bounce point (bank shots)
+    spin_x: float = 0.0        # -1.0 (left) ~ 1.0 (right)
+    spin_y: float = 0.0        # -1.0 (draw) ~ 1.0 (follow)
+    english_deflection: float = 0.0  # lateral deflection angle from side spin
 
 
 class PhysicsEngine:
@@ -479,6 +482,109 @@ class PhysicsEngine:
             target_frames.append((tx, ty))
 
         return cue_frames, target_frames
+
+    # ─── 旋转/杆法 ─────────────────────────────────────────────────
+
+    def calculate_shot_with_spin(self, cue_pos: Vec2, target_pos: Vec2,
+                                  pocket_pos: Vec2, spin_x: float = 0.0,
+                                  spin_y: float = 0.0) -> ShotResult:
+        """Calculate a direct shot with spin effects.
+
+        spin_x: side spin (-1.0 left, +1.0 right)
+        spin_y: vertical spin (-1.0 draw, 0.0 stun, +1.0 follow)
+        """
+        shot = self.calculate_shot(cue_pos, target_pos, pocket_pos)
+        if not shot.success:
+            return shot
+
+        # Side spin: deflect cue ball path laterally after hitting target
+        # A cue ball with side spin curves slightly and deflects differently
+        # SIDE_SPIN_DEFLECTION ≈ 3° per unit of spin
+        SIDE_DEFLECTION_PER_UNIT = 3.0 * math.pi / 180.0
+        english_deflection = spin_x * SIDE_DEFLECTION_PER_UNIT
+
+        # Vertical spin: modifies cue ball final position
+        # Draw (spin_y < 0): cue ball pulls BACK after collision
+        # Follow (spin_y > 0): cue ball continues FORWARD after collision
+        # Stun (spin_y = 0): cue ball stops at the collision point (approximately)
+
+        cue_start = shot.cue_path[0]
+        cue_hit_pos = shot.cue_path[-1]  # where cue hits target
+        # Direction from cue start to hit position
+        approach_dir = Vec2(cue_hit_pos.x - cue_start.x,
+                           cue_hit_pos.y - cue_start.y)
+        approach_dist = approach_dir.length()
+        if approach_dist < 0.001:
+            shot.spin_x = spin_x
+            shot.spin_y = spin_y
+            shot.english_deflection = english_deflection
+            return shot
+        approach_n = approach_dir.normalized()
+
+        # Vertical spin effect on cue final position
+        # Follow: cue goes forward ~30% of approach distance
+        # Draw: cue comes back ~40% of approach distance
+        # Stun: cue stops near collision point
+        if spin_y > 0.1:  # Follow
+            follow_dist = approach_dist * 0.3 * spin_y
+            final_x = cue_hit_pos.x + approach_n.x * follow_dist
+            final_y = cue_hit_pos.y + approach_n.y * follow_dist
+        elif spin_y < -0.1:  # Draw
+            draw_dist = approach_dist * 0.4 * abs(spin_y)
+            final_x = cue_hit_pos.x - approach_n.x * draw_dist
+            final_y = cue_hit_pos.y - approach_n.y * draw_dist
+        else:  # Stun/stop
+            final_x = cue_hit_pos.x + approach_n.x * approach_dist * 0.05
+            final_y = cue_hit_pos.y + approach_n.y * approach_dist * 0.05
+
+        # Clamp
+        final_x = max(0.01, min(0.99, final_x))
+        final_y = max(0.01, min(0.99, final_y))
+
+        # Side spin deflection: rotate the cue path end slightly
+        cos_a = math.cos(english_deflection)
+        sin_a = math.sin(english_deflection)
+        deflected_x = approach_n.x * cos_a - approach_n.y * sin_a
+        deflected_y = approach_n.x * sin_a + approach_n.y * cos_a
+        deflected_hit = Vec2(
+            cue_hit_pos.x + deflected_x * approach_dist * 0.1,
+            cue_hit_pos.y + deflected_y * approach_dist * 0.1,
+        )
+
+        return ShotResult(
+            cue_path=[cue_start, deflected_hit],
+            target_path=shot.target_path,
+            target_pocket=shot.target_pocket,
+            cue_speed=shot.cue_speed * (1.0 + 0.1 * abs(spin_x)),
+            target_speed=shot.target_speed,
+            success=True,
+            cue_final_pos=Vec2(final_x, final_y),
+            spin_x=spin_x,
+            spin_y=spin_y,
+            english_deflection=english_deflection,
+        )
+
+    @staticmethod
+    def suggest_spin_for_landing(cue_pos: Vec2, target_pos: Vec2,
+                                  desired_final: Vec2) -> Tuple[float, float]:
+        """Suggest spin values to land the cue ball near desired_final.
+
+        Returns (spin_x, spin_y).
+        """
+        approach = target_pos - cue_pos
+        desired = desired_final - target_pos
+        dist = approach.length()
+        if dist < 0.001:
+            return (0.0, 0.0)
+        approach_n = approach.normalized()
+        # Project desired offset onto approach direction
+        proj = desired.dot(approach_n)
+        # Follow if desired is forward, draw if backward
+        spin_y = max(-1.0, min(1.0, proj / (dist * 0.3)))
+        # Side spin: perpendicular component
+        perp_x = desired.x - proj * approach_n.x
+        spin_x = max(-1.0, min(1.0, perp_x / (dist * 0.15)))
+        return (spin_x, spin_y)
 
     # ─── 内部方法 ─────────────────────────────────────────────────
 

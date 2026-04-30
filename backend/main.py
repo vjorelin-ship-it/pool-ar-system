@@ -472,6 +472,18 @@ class PoolARSystem:
         """根据物理引擎结果推荐杆法"""
         if not result.success or not result.cue_final_pos:
             return "中杆"
+        # Use explicit spin info when available
+        if hasattr(result, 'spin_y') and result.spin_y != 0:
+            sy = result.spin_y
+            sx = abs(result.spin_x) if hasattr(result, 'spin_x') else 0
+            if sy > 0.2:
+                suf = "高杆" + ("加塞" if sx > 0.3 else "")
+            elif sy < -0.2:
+                suf = "低杆" + ("加塞" if sx > 0.3 else "")
+            else:
+                suf = "定杆" + ("加塞" if sx > 0.3 else "")
+            return suf
+        # Fallback to original heuristics
         # 粗略判断：母球朝目标方向继续前进=高杆，后退=低杆
         dx = result.cue_final_pos.x - result.cue_path[0].x
         dy = result.cue_final_pos.y - result.cue_path[0].y
