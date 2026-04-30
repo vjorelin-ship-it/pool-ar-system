@@ -197,6 +197,162 @@ class PhysicsEngine:
 
         return best_shot
 
+    # ─── 两库翻袋 ──────────────────────────────────────────────────
+
+    def calculate_double_bank_shot(self, cue_pos: Vec2, target_pos: Vec2,
+                                    pocket_pos: Vec2) -> ShotResult:
+        """Calculate two-cushion bank shot.
+
+        Mirror the pocket across two cushions to get a double-phantom pocket.
+        Valid cushion pairs: (top,left) (top,right) (bottom,left) (bottom,right)
+        """
+        # Double reflections: first reflect across cushion A, then across cushion B
+        double_reflections = [
+            # (name, phantom_x, phantom_y, bounce1_side, bounce1_edge, bounce2_side, bounce2_edge)
+            # Top → Left
+            ("top-left",
+             -pocket_pos.x, -pocket_pos.y,
+             "top", 0.0, "left", 0.0),
+            # Top → Right
+            ("top-right",
+             2.0 - pocket_pos.x, -pocket_pos.y,
+             "top", 0.0, "right", 1.0),
+            # Bottom → Left
+            ("bottom-left",
+             -pocket_pos.x, 2.0 - pocket_pos.y,
+             "bottom", 1.0, "left", 0.0),
+            # Bottom → Right
+            ("bottom-right",
+             2.0 - pocket_pos.x, 2.0 - pocket_pos.y,
+             "bottom", 1.0, "right", 1.0),
+        ]
+
+        best_shot = self._no_shot()
+        best_score = float("inf")
+
+        for name, px, py, s1, e1, s2, e2 in double_reflections:
+            phantom = Vec2(px, py)
+            # Direction from target to double-phantom
+            to_phantom = phantom - target_pos
+            to_phantom_n = to_phantom.normalized()
+            aim_point = target_pos + to_phantom_n * (-self.AIM_OFFSET)
+
+            # Collision check
+            if not self._will_hit_target(cue_pos, aim_point, target_pos):
+                continue
+
+            # Angle check
+            cue_to_target = target_pos - cue_pos
+            angle = self._angle_between(cue_to_target, to_phantom)
+            if abs(angle) > self.MAX_ANGLE_BANK * 1.3:
+                continue
+
+            # Distance check (relax for double bank)
+            dist_target_pocket = target_pos.dist_to(pocket_pos)
+            if dist_target_pocket > self.MAX_DIST_BANK * 1.5:
+                continue
+
+            # Compute two bounce points
+            b1 = self._line_edge_intersect(target_pos, phantom, s1, e1)
+            if b1 is None or not self._on_cushion_edge(b1, s1):
+                continue
+            b2 = self._line_edge_intersect(b1, phantom, s2, e2)
+            if b2 is None or not self._on_cushion_edge(b2, s2):
+                continue
+
+            # Velocity (double bank needs more power)
+            dist_to_aim = cue_pos.dist_to(aim_point)
+            cue_speed = self._speed_from_distance(dist_to_aim) * 1.5
+            target_speed = cue_speed * 0.3
+
+            cue_final = self._estimate_cue_stop(cue_pos, aim_point, cue_speed)
+
+            shot = ShotResult(
+                cue_path=[cue_pos, aim_point],
+                target_path=[target_pos, b1, b2, pocket_pos],
+                target_pocket=pocket_pos,
+                cue_speed=cue_speed,
+                target_speed=target_speed,
+                success=True,
+                cue_final_pos=cue_final,
+                is_bank_shot=True,
+                bounce_point=b1,
+            )
+            score = target_pos.dist_to(b1) + b1.dist_to(b2) + b2.dist_to(pocket_pos)
+            if score < best_score:
+                best_score = score
+                best_shot = shot
+
+        return best_shot
+
+    # ─── 组合球/传球 ───────────────────────────────────────────────
+
+    def calculate_combo_shot(self, cue_pos: Vec2, intermediate_pos: Vec2,
+                              target_pos: Vec2, pocket_pos: Vec2) -> ShotResult:
+        """Calculate a combination/passing shot.
+
+        Cue ball → intermediate ball → target ball → pocket.
+        The intermediate ball acts as a 'cue ball' for the target.
+        """
+        # First: intermediate → target → pocket (same as direct shot logic)
+        to_pocket = pocket_pos - target_pos
+        to_pocket_n = to_pocket.normalized()
+        dist_target_pocket = target_pos.dist_to(pocket_pos)
+
+        if dist_target_pocket > self.MAX_DIST_DIRECT:
+            return self._no_shot()
+
+        # Aim point for intermediate → target collision
+        aim_intermediate = target_pos + to_pocket_n * (-self.AIM_OFFSET)
+
+        # Check if intermediate can hit target
+        if not self._will_hit_target(intermediate_pos, aim_intermediate, target_pos):
+            return self._no_shot()
+
+        # Angle check: intermediate → target vs target → pocket
+        mid_to_target = target_pos - intermediate_pos
+        angle1 = self._angle_between(mid_to_target, to_pocket)
+        if abs(angle1) > self.MAX_ANGLE_DIRECT:
+            return self._no_shot()
+
+        # Second: cue → intermediate
+        # Aim point for cue → intermediate collision (intermediate goes toward aim_intermediate)
+        dir_intermediate = aim_intermediate - intermediate_pos
+        dir_intermediate_n = dir_intermediate.normalized()
+        aim_cue = intermediate_pos + dir_intermediate_n * (-self.AIM_OFFSET)
+
+        # Check if cue can hit intermediate
+        if not self._will_hit_target(cue_pos, aim_cue, intermediate_pos):
+            return self._no_shot()
+
+        # Angle check: cue → intermediate vs intermediate → target
+        angle2 = self._angle_between(aim_cue - cue_pos, aim_intermediate - intermediate_pos)
+        if abs(angle2) > self.MAX_ANGLE_DIRECT:
+            return self._no_shot()
+
+        # Distance
+        dist_cue_intermediate = cue_pos.dist_to(intermediate_pos)
+        total_dist = dist_cue_intermediate + dist_target_pocket
+        if total_dist > self.MAX_DIST_DIRECT * 1.5:
+            return self._no_shot()
+
+        # Velocity (combo needs more power due to two collisions)
+        cue_speed = self._speed_from_distance(total_dist) * 1.4
+        intermediate_speed = cue_speed * 0.7
+        target_speed = intermediate_speed * 0.7
+
+        cue_final = self._estimate_cue_stop(cue_pos, aim_cue, cue_speed)
+
+        return ShotResult(
+            cue_path=[cue_pos, aim_cue],
+            target_path=[intermediate_pos, aim_intermediate, target_pos, pocket_pos],
+            target_pocket=pocket_pos,
+            cue_speed=cue_speed,
+            target_speed=target_speed,
+            success=True,
+            cue_final_pos=cue_final,
+        )
+
     # ─── 最佳球袋选择 ─────────────────────────────────────────────
 
     def find_best_shot(self, cue_pos: Vec2, target_pos: Vec2) -> ShotResult:
@@ -224,6 +380,37 @@ class PhysicsEngine:
                     best_score = score
 
         return best or self._no_shot()
+
+    def find_best_shot_with_context(self, cue_pos: Vec2, target_pos: Vec2,
+                                     all_balls: List[Vec2]) -> ShotResult:
+        """Like find_best_shot but considers combinations with nearby balls."""
+        best = self.find_best_shot(cue_pos, target_pos)
+        best_score = float("inf")
+        if best.success:
+            best_score = target_pos.dist_to(best.target_pocket)
+
+        # Try double bank for each pocket
+        for pocket in self.POCKETS:
+            db = self.calculate_double_bank_shot(cue_pos, target_pos, pocket)
+            if db.success:
+                dist = target_pos.dist_to(pocket) * 1.3  # weighted, double bank is harder
+                if dist < best_score:
+                    best = db
+                    best_score = dist
+
+        # Try combo shots using other balls as intermediates
+        for mid in all_balls:
+            if mid.dist_to(cue_pos) < 0.02 or mid.dist_to(target_pos) < 0.02:
+                continue
+            for pocket in self.POCKETS:
+                combo = self.calculate_combo_shot(cue_pos, mid, target_pos, pocket)
+                if combo.success:
+                    dist = target_pos.dist_to(pocket) * 1.4
+                    if dist < best_score:
+                        best = combo
+                        best_score = dist
+
+        return best if best.success else self._no_shot()
 
     # ─── 轨迹生成 ─────────────────────────────────────────────────
 
