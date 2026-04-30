@@ -36,6 +36,8 @@ class TrainingMode:
     def __init__(self):
         self.session = TrainingSession()
         self._placement_threshold = 0.02
+        self._speed_history = []  # list of (speed_m_s, level, drill_idx)
+        self._speed_stats = {"drill_avg": 0.0, "drill_std": 0.0, "level_avg": 0.0, "level_std": 0.0, "count": 0}
 
     def start_challenge(self) -> dict:
         self.session = TrainingSession(challenge_mode=True)
@@ -85,13 +87,51 @@ class TrainingMode:
         if s.challenge_mode and s.consecutive_successes >= 3:
             passed = self._advance_drill_or_level()
 
-        return {
+        result = {
             "success": success and in_zone,
             "cue_in_zone": in_zone,
             "consecutive": s.consecutive_successes,
             "passed": passed,
             "feedback": feedback,
         }
+        # 附加杆速统计
+        result["speed_stats"] = dict(self._speed_stats)
+        return result
+
+    def record_speed(self, speed_m_s: float) -> None:
+        """记录一次击球的杆速"""
+        s = self.session
+        self._speed_history.append((speed_m_s, s.current_level, s.current_drill_idx))
+        self._update_speed_stats()
+
+    def _update_speed_stats(self) -> None:
+        """重新计算当前训练题和当前档位的杆速统计"""
+        import math
+        s = self.session
+        # 当前题的速度
+        drill_speeds = [sp for sp, lv, dr in self._speed_history
+                        if lv == s.current_level and dr == s.current_drill_idx]
+        # 当前档的速度
+        level_speeds = [sp for sp, lv, dr in self._speed_history
+                        if lv == s.current_level]
+
+        def avg_std(values):
+            if not values:
+                return 0.0, 0.0
+            avg = sum(values) / len(values)
+            var = sum((v - avg) ** 2 for v in values) / len(values)
+            return round(avg, 2), round(math.sqrt(var), 2)
+
+        d_avg, d_std = avg_std(drill_speeds)
+        l_avg, l_std = avg_std(level_speeds)
+        self._speed_stats = {
+            "drill_avg": d_avg, "drill_std": d_std,
+            "level_avg": l_avg, "level_std": l_std,
+            "count": len(drill_speeds),
+        }
+
+    def get_speed_stats(self) -> dict:
+        return dict(self._speed_stats)
 
     def process_auto_result(self, target_pocketed: bool,
                              drill: 'TrainingDrill',
@@ -161,6 +201,7 @@ class TrainingMode:
                 "total_successes": s.total_successes,
                 "completed_levels": s.completed_levels,
                 "challenge_mode": s.challenge_mode,
+                "speed_history": self._speed_history[-200:],
                 "last_updated": _dt.now().isoformat(),
             }
             with open(p, 'w', encoding='utf-8') as f:
@@ -187,6 +228,8 @@ class TrainingMode:
             self.session.completed_levels = data.get("completed_levels", [])
             self.session.unlocked_levels = data.get("unlocked_levels", [1])
             self.session.challenge_mode = data.get("challenge_mode", False)
+            self._speed_history = data.get("speed_history", [])
+            self._update_speed_stats()
             return True
         except Exception:
             return False

@@ -262,6 +262,10 @@ class PoolARSystem:
                         if hasattr(b, 'is_cue') and b.is_cue:
                             cue_final = (b.x, b.y)
                             break
+                    # 记录杆速
+                    cue_speed = system_state["table_state"].get("last_cue_speed", 0)
+                    if cue_speed > 0:
+                        self.training_mode.record_speed(cue_speed)
                     result = self.training_mode.process_auto_result(
                         target_pocketed=True, drill=drill, cue_final=cue_final,
                     )
@@ -270,6 +274,7 @@ class PoolARSystem:
                         "cue_pocketed": ev.is_cue,
                         "consecutive_successes": self.training_mode.session.consecutive_successes,
                         "drill_passed": result.get("passed", False),
+                        "speed_stats": result.get("speed_stats", {}),
                         "feedback": self.announcer.shot_result(
                             result.get("success", False),
                             result.get("cue_in_zone", True),

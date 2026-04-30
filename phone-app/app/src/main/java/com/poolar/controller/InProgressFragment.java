@@ -309,8 +309,24 @@ public class InProgressFragment extends Fragment {
             shotResultText.setText("❌ 未成功");
             shotResultText.setTextColor(getResources().getColor(R.color.error));
         }
+        StringBuilder fb = new StringBuilder();
         if (shotFeedbackText != null && data.has("feedback")) {
-            shotFeedbackText.setText(data.get("feedback").getAsString());
+            fb.append(data.get("feedback").getAsString());
+        }
+        // 杆速统计
+        if (data.has("speed_stats")) {
+            JsonObject ss = data.getAsJsonObject("speed_stats");
+            double dAvg = ss.has("drill_avg") ? ss.get("drill_avg").getAsDouble() : 0;
+            double lAvg = ss.has("level_avg") ? ss.get("level_avg").getAsDouble() : 0;
+            int count = ss.has("count") ? ss.get("count").getAsInt() : 0;
+            if (count > 0) {
+                if (fb.length() > 0) fb.append("\n");
+                fb.append(String.format("⚡ 本题均速 %.1f m/s | 本档均速 %.1f m/s (%d杆)",
+                    dAvg, lAvg, count));
+            }
+        }
+        if (shotFeedbackText != null && fb.length() > 0) {
+            shotFeedbackText.setText(fb.toString());
             shotFeedbackText.setVisibility(View.VISIBLE);
         }
         if (consecutiveText != null && data.has("consecutive")) {
