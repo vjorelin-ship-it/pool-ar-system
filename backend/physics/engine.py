@@ -386,34 +386,64 @@ class PhysicsEngine:
 
     def find_best_shot_with_context(self, cue_pos: Vec2, target_pos: Vec2,
                                      all_balls: List[Vec2]) -> ShotResult:
-        """Like find_best_shot but considers combinations with nearby balls."""
-        best = self.find_best_shot(cue_pos, target_pos)
+        """Find best shot considering all 5 types: direct, bank, double-bank, combo, spin."""
+        best: Optional[ShotResult] = None
         best_score = float("inf")
-        if best.success:
-            best_score = target_pos.dist_to(best.target_pocket)
+        WEIGHTS = {
+            "direct": 1.0,
+            "bank": 1.15,
+            "double_bank": 1.3,
+            "combo": 1.4,
+            "spin": 1.15,
+        }
 
-        # Try double bank for each pocket
         for pocket in self.POCKETS:
+            # 直接球
+            direct = self.calculate_shot(cue_pos, target_pos, pocket)
+            if direct.success:
+                score = target_pos.dist_to(pocket) * WEIGHTS["direct"]
+                if score < best_score:
+                    best, best_score = direct, score
+
+            # 一库翻袋
+            bank = self.calculate_bank_shot(cue_pos, target_pos, pocket)
+            if bank.success:
+                score = target_pos.dist_to(pocket) * WEIGHTS["bank"]
+                if score < best_score:
+                    best, best_score = bank, score
+
+            # 两库翻袋
             db = self.calculate_double_bank_shot(cue_pos, target_pos, pocket)
             if db.success:
-                dist = target_pos.dist_to(pocket) * 1.3  # weighted, double bank is harder
-                if dist < best_score:
-                    best = db
-                    best_score = dist
+                score = target_pos.dist_to(pocket) * WEIGHTS["double_bank"]
+                if score < best_score:
+                    best, best_score = db, score
 
-        # Try combo shots using other balls as intermediates
-        for mid in all_balls:
-            if mid.dist_to(cue_pos) < 0.02 or mid.dist_to(target_pos) < 0.02:
-                continue
-            for pocket in self.POCKETS:
-                combo = self.calculate_combo_shot(cue_pos, mid, target_pos, pocket)
-                if combo.success:
-                    dist = target_pos.dist_to(pocket) * 1.4
-                    if dist < best_score:
-                        best = combo
-                        best_score = dist
+            # 旋转球：当直接球可行时，计算旋转修正
+            if direct.success and direct.cue_final_pos:
+                for spin_x, spin_y in [(0, 0.5), (0, -0.5), (0.5, 0), (-0.5, 0), (0, 0)]:
+                    spin_shot = self.calculate_shot_with_spin(
+                        cue_pos, target_pos, pocket, spin_x=spin_x, spin_y=spin_y)
+                    if spin_shot.success:
+                        score = target_pos.dist_to(pocket) * WEIGHTS["spin"]
+                        if score < best_score:
+                            best, best_score = spin_shot, score
 
-        return best if best.success else self._no_shot()
+        # 组合球：限制最近邻3个中间球
+        if all_balls:
+            sorted_mids = sorted(
+                [(m, m.dist_to(cue_pos) + m.dist_to(target_pos)) for m in all_balls
+                 if m.dist_to(cue_pos) > 0.02 and m.dist_to(target_pos) > 0.02],
+                key=lambda x: x[1])
+            for mid, _ in sorted_mids[:3]:
+                for pocket in self.POCKETS:
+                    combo = self.calculate_combo_shot(cue_pos, mid, target_pos, pocket)
+                    if combo.success:
+                        score = target_pos.dist_to(pocket) * WEIGHTS["combo"]
+                        if score < best_score:
+                            best, best_score = combo, score
+
+        return best if best is not None and best.success else self._no_shot()
 
     # ─── 轨迹生成 ─────────────────────────────────────────────────
 
