@@ -72,12 +72,12 @@ class CorrectionModel:
         self._stats_path = os.path.join(self._model_dir, "correction_stats.json")
 
         self._model: Optional[ResidualCorrector] = None
-        self._device = "cpu"
         self._is_trained = False
         self._train_count = 0
 
         if HAS_TORCH:
-            self._device = "cuda" if torch.cuda.is_available() else "cpu"
+            from learning.gpu_device import get_device
+            self._device = get_device()
 
     # ─── 训练 ────────────────────────────────────────────────────
 
@@ -169,7 +169,7 @@ class CorrectionModel:
             "train_samples": len(train_set),
             "val_samples": len(val_set),
             "best_val_loss": round(best_val_loss, 6),
-            "device": self._device,
+            "device": str(self._device),
         }
 
     # ─── 推理 ────────────────────────────────────────────────────

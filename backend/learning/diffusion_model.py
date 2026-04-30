@@ -77,7 +77,8 @@ class DiffusionTrajectoryModel:
         )
 
         # ---- device --------------------------------------------------------
-        self._device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        from learning.gpu_device import get_device
+        self._device = get_device()
         self.to(self._device)
 
         # ---- state ---------------------------------------------------------
