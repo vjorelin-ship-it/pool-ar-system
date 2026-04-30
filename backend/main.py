@@ -493,6 +493,7 @@ class PoolARSystem:
         if not cal["active"]:
             return
         if not self.camera or not self.camera.is_running():
+            cal["status"] = "Camera not available"
             return
 
         markers = [
@@ -502,32 +503,126 @@ class PoolARSystem:
         ]
         cal["markers"] = markers
 
+        # Step 1: Project calibration pattern
         cal_b64 = self.renderer.render_calibration_to_base64(markers)
         if self._loop:
             asyncio.run_coroutine_threadsafe(
                 manager.broadcast_projection(cal_b64), self._loop,
             )
 
+        # Step 2: Wait briefly for projection to be visible, then capture
+        time.sleep(0.3)
         frame = self.camera.get_frame()
-        if frame and frame.valid and self._last_table_corners is not None:
-            cal["table_detected"] = True
-            cal["status"] = "Calibration image projected. Check alignment."
-            # Persist calibration result
-            corners_list = [(float(p[0]), float(p[1]))
-                            for p in self._last_table_corners]
-            try:
-                # Save calibration (homography computed from marker detection)
-                # The homography matrix maps between camera and projector coords.
-                # Currently placeholder — a proper homography requires detecting
-                # projected markers in the camera image and computing the transform.
-                save_calibration(corners_list, [], markers)
-                cal["saved"] = True
-                print("[Calibration] Saved to disk")
-            except Exception as e:
-                print(f"[Calibration] Save error: {e}")
-        else:
+        if not frame or not frame.valid:
+            cal["status"] = "No camera frame"
+            return
+
+        # Step 3: Detect table and get warped overhead view
+        found = self.table_detector.find_table(frame.data)
+        if not found:
             cal["table_detected"] = False
-            cal["status"] = "Waiting for camera..."
+            cal["status"] = "Table not detected"
+            return
+
+        region = self.table_detector.get_table_region()
+        self._last_table_corners = region.corners
+        warped = self.table_detector.warp(frame.data)
+        cal["table_detected"] = True
+
+        # Step 4: Detect projected markers in the warped overhead view
+        detected = self._detect_calibration_markers(warped)
+        if len(detected) < 4:
+            cal["status"] = f"Detected only {len(detected)}/9 markers"
+            return
+
+        # Step 5: Match detected markers to known projector positions
+        import numpy as _np
+        # Sort both by spatial position (row-major: top-left to bottom-right)
+        detected_sorted = sorted(detected, key=lambda p: (p[1], p[0]))
+        markers_sorted = sorted(markers, key=lambda p: (p[1], p[0]))
+        # The marker positions are in normalized projector coords [0,1]
+        # We need them in the projector pixel space (1920x1080) for the homography
+        proj_pixels = _np.array([
+            [mx * self.renderer.WIDTH, my * self.renderer.HEIGHT]
+            for mx, my in markers_sorted
+        ], dtype=_np.float32)
+        # Detected positions are in normalized camera coords [0,1] from warped view
+        # Convert to the warped image pixel space for homography
+        h_warped, w_warped = warped.shape[:2]
+        cam_pixels = _np.array([
+            [dx * w_warped, dy * h_warped]
+            for dx, dy in detected_sorted
+        ], dtype=_np.float32)
+
+        # Step 6: Compute homography (camera → projector)
+        H, mask = cv2.findHomography(cam_pixels, proj_pixels, cv2.RANSAC, 5.0)
+        if H is None:
+            cal["status"] = "Homography computation failed"
+            return
+
+        inliers = int(mask.sum()) if mask is not None else 0
+        cal["homography_inliers"] = inliers
+        cal["status"] = f"Calibrated ({inliers}/9 inliers)"
+
+        # Step 7: Save
+        corners_list = [(float(p[0]), float(p[1]))
+                        for p in self._last_table_corners]
+        try:
+            save_calibration(corners_list, H.tolist(), markers)
+            cal["saved"] = True
+            print(f"[Calibration] Saved with homography ({inliers}/9 inliers)")
+        except Exception as e:
+            print(f"[Calibration] Save error: {e}")
+            cal["status"] = "Save failed"
+
+    @staticmethod
+    def _detect_calibration_markers(warped):
+        """Detect projected calibration markers in the warped overhead view.
+
+        The markers are red crosshairs surrounded by green circles.
+        Returns list of (x, y) normalized coordinates in [0,1].
+        """
+        import cv2
+        import numpy as np
+        h, w = warped.shape[:2]
+
+        # Red channel minus grayscale to isolate red markers
+        b, g, r = cv2.split(warped)
+        gray = cv2.cvtColor(warped, cv2.COLOR_BGR2GRAY)
+        # Red prominence: R - max(G, B)
+        red_map = r.astype(np.float32) - np.maximum(g, b).astype(np.float32)
+        red_map = np.clip(red_map, 0, 255).astype(np.uint8)
+
+        # Also try green prominence (green circles)
+        green_map = g.astype(np.float32) - np.maximum(r, b).astype(np.float32)
+        green_map = np.clip(green_map, 0, 255).astype(np.uint8)
+
+        # Combine: markers are red + green
+        combined = cv2.addWeighted(red_map, 0.6, green_map, 0.4, 0)
+
+        # Threshold to find bright marker regions
+        _, thresh = cv2.threshold(combined, 40, 255, cv2.THRESH_BINARY)
+        # Morphological close to merge nearby pixels
+        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7))
+        closed = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel)
+        # Open to remove small noise
+        opened = cv2.morphologyEx(closed, cv2.MORPH_OPEN, kernel)
+
+        # Find contours → centroids
+        contours, _ = cv2.findContours(opened, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        points = []
+        for cnt in contours:
+            area = cv2.contourArea(cnt)
+            if area < 30 or area > 2000:
+                continue
+            M = cv2.moments(cnt)
+            if M["m00"] < 1:
+                continue
+            cx = M["m10"] / M["m00"]
+            cy = M["m01"] / M["m00"]
+            points.append((float(cx / w), float(cy / h)))
+
+        return points
 
     def _vision_loop(self) -> None:
         frame_counter = 0
