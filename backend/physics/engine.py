@@ -609,7 +609,7 @@ class PhysicsEngine:
         perp = (to_target - proj_vec).length()
         # 若垂线距离 ≤ 两球半径之和 → 命中
         # 宽松阈值：允许aim_point到target的距离略大于2倍半径
-        return perp <= self.BALL_RADIUS * 2.5
+        return perp <= self.BALL_RADIUS * 2.0
 
     @staticmethod
     def _line_edge_intersect(p1: Vec2, p2: Vec2, side: str,

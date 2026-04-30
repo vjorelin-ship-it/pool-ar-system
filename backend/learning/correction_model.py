@@ -239,8 +239,13 @@ class CorrectionModel:
         if not os.path.exists(path):
             return False
 
-        self._model = ResidualCorrector().to(self._device)
-        self._model.load_state_dict(torch.load(path, map_location=self._device))
+        # Read state dict to determine input_dim
+        import torch
+        state = torch.load(path, map_location=self._device, weights_only=True)
+        input_dim = state["fc1.weight"].shape[1]  # second dim of first layer weight
+
+        self._model = ResidualCorrector(input_dim=input_dim).to(self._device)
+        self._model.load_state_dict(state)
         self._model.eval()
 
         if os.path.exists(self._stats_path):

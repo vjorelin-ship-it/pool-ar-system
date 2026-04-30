@@ -95,9 +95,11 @@ class ConnectionManager:
                 self._projector_preview_clients.discard(ws)
 
     async def broadcast_table_state(self) -> None:
+        ts = system_state["table_state"]
+        # Scrub non-serializable ball_objects
         data = json.dumps({
             "type": "table_state",
-            "data": system_state["table_state"],
+            "data": {k: v for k, v in ts.items() if k != "ball_objects"},
         })
         dead = set()
         for ws in list(self._phone_clients):

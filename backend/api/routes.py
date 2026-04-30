@@ -55,7 +55,8 @@ async def get_status():
 
 @router.get("/table")
 async def get_table():
-    return system_state["table_state"]
+    ts = system_state["table_state"]
+    return {k: v for k, v in ts.items() if k != "ball_objects"}
 
 
 @router.get("/table/view")

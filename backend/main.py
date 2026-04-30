@@ -230,7 +230,7 @@ class PoolARSystem:
             # The drill defines a target position; we should confirm the ball pocketed
             # at that position matches the expected target before marking success.
             if current_mode in ("training", "challenge"):
-                if (ev.is_solid or ev.is_stripe) and not hasattr(self, '_training_processed'):
+                if (ev.is_solid or ev.is_stripe) and not self._training_processed:
                     drill = self.training_mode.session.get_current_drill()
                     cue_final = (0, 0)
                     for b in balls:
@@ -503,6 +503,7 @@ class PoolARSystem:
     # ── shot recommendation ──
 
     def _do_calibration(self) -> None:
+        import cv2
         cal = system_state["calibration"]
         if not cal["active"]:
             return
