@@ -45,6 +45,44 @@ def test_physics():
     if best.success:
         print(f"    -> 目标袋口: ({best.target_pocket.x:.2f}, {best.target_pocket.y:.2f})")
 
+    # 两库翻袋
+    result_db = phy.calculate_double_bank_shot(
+        Vec2(0.2, 0.3), Vec2(0.15, 0.4), Vec2(1.0, 0.5))
+    print(f"  [OK] 两库翻袋: {'可行' if result_db.success else '不可行'}")
+    if result_db.success:
+        assert len(result_db.target_path) == 4, "两库翻袋应有4段路径(cue→aim, target→b1→b2→pocket)"
+        assert result_db.is_bank_shot, "应标记为翻袋"
+        assert result_db.bounce_point is not None, "应有反弹点"
+
+    # 组合球传球
+    result_combo = phy.calculate_combo_shot(
+        Vec2(0.3, 0.3), Vec2(0.4, 0.4), Vec2(0.5, 0.5), Vec2(1.0, 0.5))
+    print(f"  [OK] 组合球: {'可行' if result_combo.success else '不可行'}")
+    if result_combo.success:
+        assert len(result_combo.target_path) >= 3, "组合球应有≥3段路径"
+
+    # 旋转球
+    result_spin = phy.calculate_shot_with_spin(
+        Vec2(0.2, 0.3), Vec2(0.5, 0.25), Vec2(1.0, 0.5),
+        spin_x=0.0, spin_y=0.5)  # 高杆
+    print(f"  [OK] 旋转球(高杆): {'可行' if result_spin.success else '不可行'}")
+    if result_spin.success:
+        assert result_spin.spin_y == 0.5, "应保留spin_y参数"
+        assert result_spin.cue_final_pos is not None, "应有母球最终位置"
+
+    result_spin2 = phy.calculate_shot_with_spin(
+        Vec2(0.2, 0.3), Vec2(0.5, 0.25), Vec2(1.0, 0.5),
+        spin_x=1.0, spin_y=-0.5)  # 右塞+低杆
+    print(f"  [OK] 旋转球(右塞低杆): {'可行' if result_spin2.success else '不可行'}")
+    if result_spin2.success:
+        assert abs(result_spin2.english_deflection) > 0.01, "右塞应有偏移"
+
+    # 集成: find_best_shot_with_context
+    all_balls = [Vec2(0.35, 0.45), Vec2(0.6, 0.5), Vec2(0.7, 0.7)]
+    best = phy.find_best_shot_with_context(Vec2(0.3, 0.35), Vec2(0.5, 0.25), all_balls)
+    assert best.success, f"find_best_shot_with_context应找到可行路线"
+    print(f"  [OK] find_best_shot_with_context: 成功, 目标袋({best.target_pocket.x:.2f},{best.target_pocket.y:.2f})")
+
 
 def test_match_mode():
     print("\n--═ 比赛模式 --═")
