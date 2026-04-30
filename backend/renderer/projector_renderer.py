@@ -2,7 +2,34 @@ import base64
 import io
 from typing import List, Optional, Tuple
 from dataclasses import dataclass
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFont
+import os as _os
+import platform as _platform
+
+# Try to find a CJK-capable font
+_FONT_PATH = None
+if _platform.system() == "Windows":
+    for candidate in [
+        "C:/Windows/Fonts/msyh.ttc",       # Microsoft YaHei
+        "C:/Windows/Fonts/simhei.ttf",      # SimHei
+        "C:/Windows/Fonts/simsun.ttc",      # SimSun
+    ]:
+        if _os.path.exists(candidate):
+            _FONT_PATH = candidate
+            break
+elif _platform.system() == "Darwin":
+    _FONT_PATH = "/System/Library/Fonts/PingFang.ttc" if _os.path.exists("/System/Library/Fonts/PingFang.ttc") else None
+else:
+    for candidate in ["/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc", "/usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf"]:
+        if _os.path.exists(candidate):
+            _FONT_PATH = candidate
+            break
+
+def _get_font(size: int):
+    try:
+        return ImageFont.truetype(_FONT_PATH, size) if _FONT_PATH else ImageFont.load_default()
+    except Exception:
+        return ImageFont.load_default()
 
 
 @dataclass
@@ -129,7 +156,7 @@ class ProjectorRenderer:
         # Standby text
         self._draw.text(
             (self.WIDTH // 2 - 40, self.TABLE_BOTTOM + 40),
-            "待机中", fill=(60, 60, 60),
+            "待机中", fill=(60, 60, 60), font=_get_font(28),
         )
 
     def _draw_shot(self, overlay: ProjectionOverlay) -> None:
@@ -181,7 +208,7 @@ class ProjectorRenderer:
         if overlay.label:
             self._draw.text(
                 (self.TABLE_LEFT + 10, self.TABLE_BOTTOM + 30),
-                overlay.label, fill=self.COLORS["text"], font=None,
+                overlay.label, fill=self.COLORS["text"], font=_get_font(22),
             )
 
         # Render cue technique and power
@@ -194,7 +221,7 @@ class ProjectorRenderer:
             self._draw.text(
                 (self.TABLE_LEFT + 10, self.TABLE_BOTTOM + 60),
                 " | ".join(tech_parts),
-                fill=(200, 200, 100),
+                fill=(200, 200, 100), font=_get_font(18),
             )
 
     def _norm_to_proj(self, pos: Tuple[float, float]) -> Tuple[int, int]:

@@ -246,6 +246,18 @@ _IMG_DIR = _os.path.join(_ANNOTATE_DIR, 'images')
 _LABEL_DIR = _os.path.join(_ANNOTATE_DIR, 'labels')
 
 
+def _resolve_safe_path(base_dir: str, name: str) -> str:
+    """Resolve a safe path within base_dir, preventing traversal."""
+    # Reject names with path separators or dangerous patterns
+    if '..' in name or '/' in name or '\\' in name:
+        raise HTTPException(403, "Invalid filename")
+    safe = _os.path.realpath(_os.path.join(base_dir, name))
+    base_real = _os.path.realpath(base_dir)
+    if not safe.startswith(base_real + _os.sep) and safe != base_real:
+        raise HTTPException(403, "Access denied")
+    return safe
+
+
 @router.get("/annotate/images")
 async def list_annotate_images():
     if not _os.path.isdir(_IMG_DIR):
@@ -257,7 +269,7 @@ async def list_annotate_images():
 @router.get("/annotate/image/{name}")
 async def get_annotate_image(name: str):
     from fastapi.responses import FileResponse
-    path = _os.path.join(_IMG_DIR, name)
+    path = _resolve_safe_path(_IMG_DIR, name)
     if not _os.path.isfile(path):
         raise HTTPException(404, "Image not found")
     return FileResponse(path, media_type="image/jpeg")
@@ -266,7 +278,7 @@ async def get_annotate_image(name: str):
 @router.get("/annotate/labels/{name}")
 async def get_annotate_labels(name: str):
     from fastapi.responses import PlainTextResponse
-    path = _os.path.join(_LABEL_DIR, name)
+    path = _resolve_safe_path(_LABEL_DIR, name)
     if not _os.path.isfile(path):
         return PlainTextResponse("", status_code=200)
     with open(path) as f:
@@ -278,7 +290,7 @@ async def save_annotate_labels(name: str, req: Request):
     from fastapi.responses import PlainTextResponse
     body = await req.body()
     _os.makedirs(_LABEL_DIR, exist_ok=True)
-    path = _os.path.join(_LABEL_DIR, name)
+    path = _resolve_safe_path(_LABEL_DIR, name)
     text = body.decode('utf-8').strip()
     with open(path, 'w') as f:
         f.write(text if text else ' ')

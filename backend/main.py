@@ -55,6 +55,7 @@ class PoolARSystem:
         self._vision_thread: Optional[threading.Thread] = None
         self._loop: Optional[asyncio.AbstractEventLoop] = None
         self._last_table_corners = None
+        self._training_processed = False
 
         # Load persisted learning data
         self.physics_adapter.load()
@@ -568,7 +569,7 @@ def create_app(system: PoolARSystem) -> FastAPI:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],
-        allow_credentials=True,
+        allow_credentials=False,  # Per Fetch spec, cannot use * with credentials
         allow_methods=["*"],
         allow_headers=["*"],
     )
