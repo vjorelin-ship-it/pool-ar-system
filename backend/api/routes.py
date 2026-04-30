@@ -242,50 +242,81 @@ async def camera_upload_websocket(ws: WebSocket):
     await manager.connect_camera_upload(ws)
 
 
-# ── Training Data Directory Config ──
+# ── Training Data Management ──
 
 import os as _os
+import json
+import hashlib
+import shutil
 from config import settings as _settings
 
+
+# ── Directory helpers ──
 
 def _get_ball_ml_dir() -> str:
     d = _settings.BALL_ML_DATA_DIR
     _os.makedirs(d, exist_ok=True)
     return d
 
+def _get_ball_raw_dir() -> str:
+    d = _os.path.join(_get_ball_ml_dir(), "raw")
+    _os.makedirs(d, exist_ok=True)
+    return d
 
-def _get_ball_ml_img_dir() -> str:
+def _get_ball_annotated_img_dir() -> str:
     d = _os.path.join(_get_ball_ml_dir(), "images")
     _os.makedirs(d, exist_ok=True)
     return d
 
-
-def _get_ball_ml_label_dir() -> str:
+def _get_ball_annotated_label_dir() -> str:
     d = _os.path.join(_get_ball_ml_dir(), "labels")
     _os.makedirs(d, exist_ok=True)
     return d
 
+def _get_ball_trained_dir() -> str:
+    d = _os.path.join(_get_ball_ml_dir(), "trained")
+    _os.makedirs(d, exist_ok=True)
+    return d
 
-def _get_trajectory_dir() -> str:
+def _get_traj_dir() -> str:
     d = _settings.TRAJECTORY_DATA_DIR
     _os.makedirs(d, exist_ok=True)
     return d
 
+def _get_traj_new_dir() -> str:
+    d = _os.path.join(_get_traj_dir(), "new")
+    _os.makedirs(d, exist_ok=True)
+    return d
+
+def _get_traj_trained_dir() -> str:
+    d = _os.path.join(_get_traj_dir(), "trained")
+    _os.makedirs(d, exist_ok=True)
+    return d
+
+def _count_files(d: str, ext: str) -> int:
+    if not _os.path.isdir(d):
+        return 0
+    return len([f for f in _os.listdir(d) if f.endswith(ext)])
+
+
+# ── Config endpoints ──
 
 @router.get("/config/training-dirs")
 async def get_training_dirs():
-    """获取训练数据存储目录配置"""
+    """获取训练数据目录状态（含各子目录文件数）"""
     return {
         "ball_ml_data_dir": _settings.BALL_ML_DATA_DIR,
-        "ball_ml_img_count": len([
-            f for f in _os.listdir(_get_ball_ml_img_dir())
-            if f.endswith('.jpg')
-        ]) if _os.path.isdir(_get_ball_ml_img_dir()) else 0,
+        "ball_ml": {
+            "raw": _count_files(_get_ball_raw_dir(), ".jpg"),
+            "annotated_images": _count_files(_get_ball_annotated_img_dir(), ".jpg"),
+            "annotated_labels": _count_files(_get_ball_annotated_label_dir(), ".txt"),
+            "trained": _count_files(_get_ball_trained_dir(), ".jpg"),
+        },
         "trajectory_data_dir": _settings.TRAJECTORY_DATA_DIR,
-        "trajectory_shot_count": len([
-            f for f in _os.listdir(_get_trajectory_dir())
-            if f.endswith('.json')
-        ]) if _os.path.isdir(_get_trajectory_dir()) else 0,
+        "trajectory": {
+            "new": _count_files(_get_traj_new_dir(), ".json"),
+            "trained": _count_files(_get_traj_trained_dir(), ".json"),
+        },
     }
 
 
@@ -310,6 +341,118 @@ async def set_training_dirs(req: Request):
             "trajectory_data_dir": _settings.TRAJECTORY_DATA_DIR}
 
 
+# ── Ball ML: dedup raw images ──
+
+def _image_hash(path: str, thumb_size: int = 32) -> str:
+    """Compute perceptual hash via downsample + grayscale."""
+    import cv2
+    img = cv2.imread(path, cv2.IMREAD_GRAYSCALE)
+    if img is None:
+        return ""
+    thumb = cv2.resize(img, (thumb_size, thumb_size))
+    avg = thumb.mean()
+    bits = (thumb > avg).flatten()
+    return ''.join('1' if b else '0' for b in bits)
+
+
+def _hamming_distance(h1: str, h2: str) -> int:
+    return sum(c1 != c2 for c1, c2 in zip(h1, h2))
+
+
+@router.post("/training/ball-ml/dedup")
+async def dedup_ball_raw():
+    """对raw目录中的图片一键去重，保留每张有位置变化的图片"""
+    raw_dir = _get_ball_raw_dir()
+    files = sorted([
+        f for f in _os.listdir(raw_dir)
+        if f.endswith('.jpg') or f.endswith('.png')
+    ])
+    if len(files) < 2:
+        return {"ok": True, "scanned": len(files), "removed": 0, "kept": len(files)}
+
+    # Compute hashes
+    hashes = {}
+    for f in files:
+        h = _image_hash(_os.path.join(raw_dir, f))
+        if h:
+            hashes[f] = h
+
+    # Group by similarity (hamming distance <= 4 → ~94% similar on 256-bit hash)
+    THRESHOLD = 4
+    removed = []
+    kept = list(hashes.keys())
+
+    for i in range(len(files)):
+        f1 = files[i]
+        if f1 not in hashes or f1 in removed:
+            continue
+        for j in range(i + 1, len(files)):
+            f2 = files[j]
+            if f2 not in hashes or f2 in removed:
+                continue
+            dist = _hamming_distance(hashes[f1], hashes[f2])
+            if dist <= THRESHOLD:
+                # Keep the larger file (likely higher quality), remove the smaller
+                s1 = _os.path.getsize(_os.path.join(raw_dir, f1))
+                s2 = _os.path.getsize(_os.path.join(raw_dir, f2))
+                if s1 >= s2:
+                    _os.remove(_os.path.join(raw_dir, f2))
+                    removed.append(f2)
+                else:
+                    _os.remove(_os.path.join(raw_dir, f1))
+                    removed.append(f1)
+                    break  # f1 removed, stop comparing
+
+    kept = [f for f in files if f not in removed]
+    return {
+        "ok": True,
+        "scanned": len(files),
+        "removed": len(removed),
+        "kept": len(kept),
+        "removed_files": removed[:20],
+    }
+
+
+# ── Ball ML: move annotated → trained ──
+
+@router.post("/training/ball-ml/archive-trained")
+async def archive_ball_trained():
+    """将已标注的图片和标签移动到trained目录（训练后归档）"""
+    img_dir = _get_ball_annotated_img_dir()
+    label_dir = _get_ball_annotated_label_dir()
+    trained_dir = _get_ball_trained_dir()
+
+    moved = 0
+    for f in _os.listdir(img_dir):
+        if f.endswith('.jpg'):
+            base = f.rsplit('.', 1)[0]
+            src_img = _os.path.join(img_dir, f)
+            dst_img = _os.path.join(trained_dir, f)
+            shutil.move(src_img, dst_img)
+            # Move corresponding label
+            for ext in ('.txt',):
+                src_lbl = _os.path.join(label_dir, base + ext)
+                if _os.path.exists(src_lbl):
+                    shutil.move(src_lbl, _os.path.join(trained_dir, base + ext))
+            moved += 1
+    return {"ok": True, "moved": moved}
+
+
+# ── Trajectory: move new → trained ──
+
+@router.post("/training/trajectory/archive-trained")
+async def archive_trajectory_trained():
+    """将new目录中的击球数据移动到trained目录（训练后归档）"""
+    new_dir = _get_traj_new_dir()
+    trained_dir = _get_traj_trained_dir()
+    moved = 0
+    for f in _os.listdir(new_dir):
+        if f.endswith('.json'):
+            shutil.move(_os.path.join(new_dir, f), _os.path.join(trained_dir, f))
+            moved += 1
+    return {"ok": True, "moved": moved}
+
+
 # ── Annotation API (for training data labeling) ──
 
 
@@ -326,7 +469,8 @@ def _resolve_safe_path(base_dir: str, name: str) -> str:
 
 @router.get("/annotate/images")
 async def list_annotate_images():
-    img_dir = _get_ball_ml_img_dir()
+    """列出已标注的图片（images目录）"""
+    img_dir = _get_ball_annotated_img_dir()
     if not _os.path.isdir(img_dir):
         return []
     files = sorted([f for f in _os.listdir(img_dir) if f.endswith('.jpg')])
@@ -336,7 +480,7 @@ async def list_annotate_images():
 @router.get("/annotate/image/{name}")
 async def get_annotate_image(name: str):
     from fastapi.responses import FileResponse
-    path = _resolve_safe_path(_get_ball_ml_img_dir(), name)
+    path = _resolve_safe_path(_get_ball_annotated_img_dir(), name)
     if not _os.path.isfile(path):
         raise HTTPException(404, "Image not found")
     return FileResponse(path, media_type="image/jpeg")
@@ -345,7 +489,7 @@ async def get_annotate_image(name: str):
 @router.get("/annotate/labels/{name}")
 async def get_annotate_labels(name: str):
     from fastapi.responses import PlainTextResponse
-    path = _resolve_safe_path(_get_ball_ml_label_dir(), name)
+    path = _resolve_safe_path(_get_ball_annotated_label_dir(), name)
     if not _os.path.isfile(path):
         return PlainTextResponse("", status_code=200)
     with open(path) as f:
@@ -355,7 +499,7 @@ async def get_annotate_labels(name: str):
 @router.post("/annotate/save/{name}")
 async def save_annotate_labels(name: str, req: Request):
     from fastapi.responses import PlainTextResponse
-    label_dir = _get_ball_ml_label_dir()
+    label_dir = _get_ball_annotated_label_dir()
     body = await req.body()
     path = _resolve_safe_path(label_dir, name)
     text = body.decode('utf-8').strip()

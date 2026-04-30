@@ -238,12 +238,26 @@
   <!-- Training Data Directories -->
   <div class="card">
     <div class="card-title">■ 训练素材目录</div>
-    <div style="font-size:11px;color:var(--text-dim);margin-bottom:8px">球检测ML数据</div>
+    <div style="font-size:11px;color:var(--text-dim);margin-bottom:4px">球检测ML数据</div>
     <input class="dir-input" id="ballMlDir" onchange="updateDir('ball_ml_data_dir', this.value)" placeholder="加载中...">
-    <div style="font-size:10px;color:var(--text-dim);margin-top:2px">已标注图片: <span id="ballMlImgCount">—</span> 张</div>
-    <div style="font-size:11px;color:var(--text-dim);margin-top:8px;margin-bottom:8px">轨迹训练数据</div>
+    <div style="display:flex;gap:12px;margin-top:4px;font-size:10px;font-family:var(--mono)">
+      <span style="color:var(--warn)">未标注: <b id="ballRaw">—</b></span>
+      <span style="color:var(--info)">已标注: <b id="ballAnnotated">—</b></span>
+      <span style="color:var(--text-dim)">已训练: <b id="ballTrained">—</b></span>
+    </div>
+    <div class="btn-group">
+      <button class="btn warn" onclick="dedupRaw()">⚡ 一键去重</button>
+      <button class="btn" onclick="archiveBallTrained()">▸ 归档已训练</button>
+    </div>
+    <div style="font-size:11px;color:var(--text-dim);margin-top:10px;margin-bottom:4px">轨迹训练数据</div>
     <input class="dir-input" id="trajDir" onchange="updateDir('trajectory_data_dir', this.value)" placeholder="加载中...">
-    <div style="font-size:10px;color:var(--text-dim);margin-top:2px">已采集击球: <span id="trajDirShotCount">—</span> 杆</div>
+    <div style="display:flex;gap:12px;margin-top:4px;font-size:10px;font-family:var(--mono)">
+      <span style="color:var(--warn)">未训练: <b id="trajNew">—</b></span>
+      <span style="color:var(--text-dim)">已训练: <b id="trajTrained">—</b></span>
+    </div>
+    <div class="btn-group">
+      <button class="btn" onclick="archiveTrajTrained()">▸ 归档已训练</button>
+    </div>
   </div>
 
   <!-- Calibration -->
@@ -441,8 +455,22 @@ async function loadDirs() {
       const d = await resp.json();
       document.getElementById('ballMlDir').value = d.ball_ml_data_dir;
       document.getElementById('trajDir').value = d.trajectory_data_dir;
-      document.getElementById('ballMlImgCount').textContent = d.ball_ml_img_count;
-      document.getElementById('trajDirShotCount').textContent = d.trajectory_shot_count;
+      // Ball ML subdirs
+      if (d.ball_ml) {
+        document.getElementById('ballRaw').textContent = d.ball_ml.raw;
+        document.getElementById('ballAnnotated').textContent =
+          (d.ball_ml.annotated_images || 0) + '/' + (d.ball_ml.annotated_labels || 0);
+        document.getElementById('ballTrained').textContent = d.ball_ml.trained;
+      }
+      // Trajectory subdirs
+      if (d.trajectory) {
+        document.getElementById('trajNew').textContent = d.trajectory.new;
+        document.getElementById('trajTrained').textContent = d.trajectory.trained;
+      }
+      // Also update legacy fields
+      document.getElementById('annotatedCount').textContent =
+        (d.ball_ml?.annotated_images || 0) + ' 张';
+      document.getElementById('trajColCount').textContent = d.trajectory?.new || 0;
     }
   } catch(_) {}
 }
@@ -452,6 +480,30 @@ async function updateDir(key, value) {
   await apiCall('POST', '/api/config/training-dirs', { [key]: value });
   loadDirs();
   log(`目录已更新: ${key}=${value}`, 'success');
+}
+
+async function dedupRaw() {
+  const r = await apiCall('POST', '/api/training/ball-ml/dedup');
+  if (r && r.ok) {
+    log(`去重完成: 扫描${r.scanned}张, 移除${r.removed}张重复, 保留${r.kept}张`, 'success');
+    loadDirs();
+  }
+}
+
+async function archiveBallTrained() {
+  const r = await apiCall('POST', '/api/training/ball-ml/archive-trained');
+  if (r && r.ok) {
+    log(`球检测数据归档: 移动${r.moved}张到trained`, 'success');
+    loadDirs();
+  }
+}
+
+async function archiveTrajTrained() {
+  const r = await apiCall('POST', '/api/training/trajectory/archive-trained');
+  if (r && r.ok) {
+    log(`轨迹数据归档: 移动${r.moved}条到trained`, 'success');
+    loadDirs();
+  }
 }
 
 // ─── Status Refresh ─────────────────────────────────────────

@@ -45,11 +45,11 @@ class TrajectoryCollector:
         stop_frames: int = 10,
         trigger_sigma: float = 3.0,
     ):
-        # Resolve save_dir
+        # Resolve save_dir — save to "new" subdirectory for untrained data
         if not save_dir:
             base = os.path.dirname(os.path.abspath(__file__))
             save_dir = os.path.join(base, "collected_shots")
-        self._save_dir = save_dir
+        self._save_dir = os.path.join(save_dir, "new")
         os.makedirs(self._save_dir, exist_ok=True)
 
         self._ring_size = ring_size
