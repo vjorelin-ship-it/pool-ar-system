@@ -68,7 +68,7 @@ public class WebSocketClient {
                         for (MessageListener l : listeners) l.onDisconnected();
                     });
                     if (shouldReconnect) {
-                        mainHandler.postDelayed(this::doConnect, 3000);
+                        mainHandler.postDelayed(() -> doConnect(), 3000);
                     }
                 }
 
@@ -81,7 +81,7 @@ public class WebSocketClient {
         } catch (Exception e) {
             Log.e(TAG, "Connect failed", e);
             if (shouldReconnect) {
-                mainHandler.postDelayed(this::doConnect, 3000);
+                mainHandler.postDelayed(() -> doConnect(), 3000);
             }
         }
     }
