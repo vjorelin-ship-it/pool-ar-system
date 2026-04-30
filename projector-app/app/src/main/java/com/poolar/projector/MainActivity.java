@@ -21,18 +21,27 @@ import android.widget.Toast;
 import org.java_websocket.client.WebSocketClient;
 import org.java_websocket.handshake.ServerHandshake;
 
+import com.google.gson.JsonObject;
+import com.google.gson.Gson;
+
 import java.net.URI;
 import java.util.Locale;
 
 public class MainActivity extends Activity implements TextToSpeech.OnInitListener {
     private ImageView projectionView;
     private TextView statusText;
-    private WebSocketClient wsClient;
+    private WebSocketClient wsProjectorClient;
+    private WebSocketClient wsCameraClient;
     private Handler reconnectHandler = new Handler();
     private TextToSpeech tts;
     private boolean ttsReady = false;
+    private CameraCapture cameraCapture;
+    private Gson gson = new Gson();
+    private int frameSkipCounter = 0;
+    private static final int FRAME_SKIP = 3;
     private static final String TAG = "PoolARProjector";
-    private static final String DEFAULT_SERVER = "ws://192.168.0.35:8000/api/ws/projector";
+    private static final String DEFAULT_HOST = "192.168.0.35";
+    private static final int DEFAULT_PORT = 8000;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -53,13 +62,40 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
             return true;
         });
 
-        // Initialize TTS engine
         tts = new TextToSpeech(this, this);
 
-        connectWebSocket();
+        startCameraCapture();
+        connectProjectorWebSocket();
+        connectCameraWebSocket();
     }
 
-    // ─── TextToSpeech.OnInitListener ───────────────────────
+    // ─── Camera ──────────────────────────────────────────────
+
+    private void startCameraCapture() {
+        cameraCapture = new CameraCapture(this, (jpegData, timestamp) -> {
+            frameSkipCounter++;
+            if (frameSkipCounter % FRAME_SKIP != 0) return;
+
+            if (wsCameraClient != null && wsCameraClient.isOpen()) {
+                try {
+                    String b64 = Base64.encodeToString(jpegData, Base64.NO_WRAP);
+                    JsonObject msg = new JsonObject();
+                    msg.addProperty("type", "camera_frame");
+                    msg.addProperty("width", 2560);
+                    msg.addProperty("height", 1440);
+                    msg.addProperty("timestamp", timestamp);
+                    msg.addProperty("frame_id", frameSkipCounter / FRAME_SKIP);
+                    msg.addProperty("data", b64);
+                    wsCameraClient.send(gson.toJson(msg));
+                } catch (Exception e) {
+                    Log.e(TAG, "Camera send error", e);
+                }
+            }
+        });
+        cameraCapture.start();
+    }
+
+    // ─── TTS ─────────────────────────────────────────────────
 
     @Override
     public void onInit(int status) {
@@ -67,14 +103,11 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
             int result = tts.setLanguage(Locale.CHINESE);
             if (result == TextToSpeech.LANG_MISSING_DATA
                 || result == TextToSpeech.LANG_NOT_SUPPORTED) {
-                Log.w(TAG, "TTS: Chinese language not supported");
-                showToast("TTS: 中文语音暂不支持");
+                Log.w(TAG, "TTS: Chinese not supported");
             } else {
                 ttsReady = true;
-                Log.d(TAG, "TTS engine ready");
+                Log.d(TAG, "TTS ready");
             }
-        } else {
-            Log.e(TAG, "TTS engine init failed");
         }
     }
 
@@ -84,110 +117,152 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         }
     }
 
-    // ─── Settings dialog ───────────────────────────────────
+    // ─── Settings ────────────────────────────────────────────
+
+    private String host() {
+        return getSharedPreferences("prefs", MODE_PRIVATE)
+            .getString("server_host", DEFAULT_HOST);
+    }
+
+    private int port() {
+        return getSharedPreferences("prefs", MODE_PRIVATE)
+            .getInt("server_port", DEFAULT_PORT);
+    }
 
     private void showSettingsDialog() {
-        SharedPreferences prefs = getSharedPreferences("prefs", MODE_PRIVATE);
-        String currentUrl = prefs.getString("server_url", DEFAULT_SERVER);
+        String current = "ws://" + host() + ":" + port();
         EditText input = new EditText(this);
         input.setInputType(InputType.TYPE_CLASS_TEXT);
-        input.setText(currentUrl);
+        input.setText(current);
         input.setSelectAllOnFocus(true);
         new AlertDialog.Builder(this)
             .setTitle("设置服务器地址")
-            .setMessage("当前: " + currentUrl)
+            .setMessage("当前: " + current)
             .setView(input)
             .setPositiveButton("连接", (d, w) -> {
                 String url = input.getText().toString().trim();
                 if (!url.isEmpty()) {
-                    prefs.edit().putString("server_url", url).apply();
-                    if (wsClient != null) wsClient.close();
-                    statusText.setText("正在连接...");
-                    connectWebSocket();
+                    try {
+                        URI uri = new URI(url);
+                        getSharedPreferences("prefs", MODE_PRIVATE)
+                            .edit()
+                            .putString("server_host", uri.getHost())
+                            .putInt("server_port", uri.getPort() <= 0 ? DEFAULT_PORT : uri.getPort())
+                            .apply();
+                    } catch (Exception e) { Log.e(TAG, "Invalid URL", e); }
+                    reconnectAll();
                 }
             })
             .setNegativeButton("取消", null)
             .show();
     }
 
-    // ─── WebSocket ─────────────────────────────────────────
+    private void reconnectAll() {
+        if (wsProjectorClient != null) wsProjectorClient.close();
+        if (wsCameraClient != null) wsCameraClient.close();
+        statusText.setText("正在重连...");
+        connectProjectorWebSocket();
+        connectCameraWebSocket();
+    }
 
-    private void connectWebSocket() {
-        String serverUrl = getSharedPreferences("prefs", MODE_PRIVATE)
-            .getString("server_url", DEFAULT_SERVER);
+    // ─── Projector WebSocket ─────────────────────────────────
+
+    private void connectProjectorWebSocket() {
+        String url = "ws://" + host() + ":" + port() + "/api/ws/projector";
         try {
-            wsClient = new WebSocketClient(new URI(serverUrl)) {
+            wsProjectorClient = new WebSocketClient(new URI(url)) {
                 @Override
                 public void onOpen(ServerHandshake handshake) {
                     runOnUiThread(() -> {
-                        statusText.setText("已连接，等待投影画面...");
+                        statusText.setText("投影已连接");
                         statusText.setVisibility(View.VISIBLE);
-                        Log.d(TAG, "Connected to server");
                     });
                 }
                 @Override
                 public void onMessage(String message) {
                     try {
-                        com.google.gson.JsonObject json = new com.google.gson.Gson()
-                            .fromJson(message, com.google.gson.JsonObject.class);
+                        JsonObject json = gson.fromJson(message, JsonObject.class);
                         String type = json.get("type").getAsString();
-
                         if ("projection".equals(type)) {
-                            String base64 = json.get("image").getAsString();
-                            byte[] imgBytes = Base64.decode(base64, Base64.DEFAULT);
-                            final Bitmap bitmap = BitmapFactory.decodeByteArray(imgBytes, 0, imgBytes.length);
+                            byte[] imgBytes = Base64.decode(
+                                json.get("image").getAsString(), Base64.DEFAULT);
+                            final Bitmap bitmap = BitmapFactory.decodeByteArray(
+                                imgBytes, 0, imgBytes.length);
                             runOnUiThread(() -> {
                                 projectionView.setImageBitmap(bitmap);
                                 statusText.setVisibility(View.GONE);
                             });
                         } else if ("announce".equals(type)) {
-                            // TTS announcement from backend announcer
-                            String text = json.get("text").getAsString();
-                            speak(text);
-                            Log.d(TAG, "Announce: " + text);
+                            speak(json.get("text").getAsString());
                         }
                     } catch (Exception e) {
-                        Log.e(TAG, "Error processing message", e);
+                        Log.e(TAG, "Message error", e);
                     }
                 }
                 @Override
                 public void onClose(int code, String reason, boolean remote) {
                     runOnUiThread(() -> {
                         statusText.setVisibility(View.VISIBLE);
-                        statusText.setText("连接断开，3秒后重连...");
+                        statusText.setText("投影断开，3秒后重连");
                     });
-                    reconnectHandler.postDelayed(MainActivity.this::connectWebSocket, 3000);
+                    reconnectHandler.postDelayed(
+                        MainActivity.this::connectProjectorWebSocket, 3000);
                 }
                 @Override
                 public void onError(Exception ex) {
-                    Log.e(TAG, "WebSocket error", ex);
-                    runOnUiThread(() -> {
-                        statusText.setVisibility(View.VISIBLE);
-                        statusText.setText("连接错误");
-                    });
+                    Log.e(TAG, "Projector WS error", ex);
                 }
             };
-            wsClient.connect();
+            wsProjectorClient.connect();
         } catch (Exception e) {
-            Log.e(TAG, "Connection failed", e);
-            reconnectHandler.postDelayed(MainActivity.this::connectWebSocket, 3000);
+            Log.e(TAG, "Projector connect failed", e);
+            reconnectHandler.postDelayed(
+                MainActivity.this::connectProjectorWebSocket, 3000);
         }
     }
 
-    // ─── Lifecycle ─────────────────────────────────────────
+    // ─── Camera Upload WebSocket ─────────────────────────────
+
+    private void connectCameraWebSocket() {
+        String url = "ws://" + host() + ":" + port() + "/api/ws/camera-upload";
+        try {
+            wsCameraClient = new WebSocketClient(new URI(url)) {
+                @Override
+                public void onOpen(ServerHandshake handshake) {
+                    Log.d(TAG, "Camera upload connected");
+                    runOnUiThread(() -> Toast.makeText(MainActivity.this,
+                        "摄像头已连接", Toast.LENGTH_SHORT).show());
+                }
+                @Override
+                public void onMessage(String message) {}
+                @Override
+                public void onClose(int code, String reason, boolean remote) {
+                    Log.w(TAG, "Camera upload closed: " + reason);
+                    reconnectHandler.postDelayed(
+                        MainActivity.this::connectCameraWebSocket, 3000);
+                }
+                @Override
+                public void onError(Exception ex) {
+                    Log.e(TAG, "Camera upload WS error", ex);
+                }
+            };
+            wsCameraClient.connect();
+        } catch (Exception e) {
+            Log.e(TAG, "Camera connect failed", e);
+            reconnectHandler.postDelayed(
+                MainActivity.this::connectCameraWebSocket, 3000);
+        }
+    }
+
+    // ─── Lifecycle ───────────────────────────────────────────
 
     @Override
     protected void onDestroy() {
-        if (tts != null) {
-            tts.stop();
-            tts.shutdown();
-        }
+        if (cameraCapture != null) cameraCapture.stop();
+        if (tts != null) { tts.stop(); tts.shutdown(); }
         reconnectHandler.removeCallbacksAndMessages(null);
-        if (wsClient != null) wsClient.close();
+        if (wsProjectorClient != null) wsProjectorClient.close();
+        if (wsCameraClient != null) wsCameraClient.close();
         super.onDestroy();
-    }
-
-    private void showToast(String msg) {
-        Toast.makeText(this, msg, Toast.LENGTH_SHORT).show();
     }
 }
