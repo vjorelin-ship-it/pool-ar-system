@@ -420,6 +420,53 @@ class PoolARSystem:
 
         return self.renderer.render_to_base64(best_overlay)
 
+    # ── Ball ML training readiness ──
+
+    @staticmethod
+    def _ball_ml_count() -> int:
+        """Count annotated ball detection images (images/ with labels/)."""
+        import os as _os
+        from config import settings
+        img_dir = _os.path.join(settings.BALL_ML_DATA_DIR, "images")
+        if not _os.path.isdir(img_dir):
+            return 0
+        return len([f for f in _os.listdir(img_dir) if f.endswith('.jpg')])
+
+    @staticmethod
+    def _is_ball_ml_ready() -> bool:
+        """Ball detection ML is considered ready when >= 30 annotated images."""
+        return PoolARSystem._ball_ml_count() >= 30
+
+    @staticmethod
+    def _annotate_preview(warped, balls):
+        """Draw ball circles and numbers on the warped frame for preview."""
+        import cv2
+        h, w = warped.shape[:2]
+        annotated = warped.copy()
+        ball_names = {
+            "white": "C", "black": "8",
+            "solid_yellow": "1", "solid_blue": "2", "solid_red": "3",
+            "solid_purple": "4", "solid_orange": "5", "solid_green": "6",
+            "solid_brown": "7",
+            "stripe_yellow": "9", "stripe_blue": "10", "stripe_red": "11",
+            "stripe_purple": "12", "stripe_orange": "13", "stripe_green": "14",
+            "stripe_brown": "15",
+        }
+        for b in balls:
+            px, py = int(b.x * w), int(b.y * h)
+            r = max(10, int(getattr(b, 'radius', 15)))
+            name = ball_names.get(getattr(b, 'color', ''), '?')
+            # Circle
+            color = (0, 255, 255) if getattr(b, 'is_cue', False) else \
+                    (0, 0, 0) if getattr(b, 'is_black', False) else \
+                    (255, 200, 0) if getattr(b, 'is_solid', False) else \
+                    (0, 200, 255)
+            cv2.circle(annotated, (px, py), r, color, 2)
+            # Number label
+            cv2.putText(annotated, name, (px - r, py - r - 4),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
+        return annotated
+
     @staticmethod
     def _recommend_technique(result) -> str:
         """根据物理引擎结果推荐杆法"""
@@ -502,9 +549,28 @@ class PoolARSystem:
                     jpeg_bytes, warped, balls = self._process_camera_frame(
                         frame, detect_balls=do_full)
 
-                    # Camera preview (always)
+                    # Camera preview with ball annotations
                     if has_preview and jpeg_bytes:
-                        b64 = base64.b64encode(jpeg_bytes).decode("utf-8")
+                        if balls and self._is_ball_ml_ready():
+                            # Draw ball numbers on warped frame
+                            annotated = self._annotate_preview(warped, balls)
+                            _, buf = cv2.imencode(".jpg", annotated,
+                                                  [cv2.IMWRITE_JPEG_QUALITY, 75])
+                            b64 = base64.b64encode(buf.tobytes()).decode("utf-8")
+                        else:
+                            # Watermark: ball detection not trained
+                            h, w = warped.shape[:2] if warped is not None else (600, 1200)
+                            watermarked = warped.copy() if warped is not None else \
+                                np.zeros((h, w, 3), dtype=np.uint8)
+                            cv2.putText(watermarked, "Ball detection model not trained",
+                                        (w // 8, h // 2), cv2.FONT_HERSHEY_SIMPLEX,
+                                        1.2, (0, 0, 255), 2)
+                            cv2.putText(watermarked, f"Annotated: {self._ball_ml_count()}/30 images",
+                                        (w // 8, h // 2 + 40), cv2.FONT_HERSHEY_SIMPLEX,
+                                        0.8, (200, 200, 200), 2)
+                            _, buf = cv2.imencode(".jpg", watermarked,
+                                                  [cv2.IMWRITE_JPEG_QUALITY, 75])
+                            b64 = base64.b64encode(buf.tobytes()).decode("utf-8")
                         asyncio.run_coroutine_threadsafe(
                             manager.broadcast_camera_preview(b64), self._loop,
                         )
