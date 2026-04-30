@@ -58,6 +58,29 @@ async def get_table():
     return system_state["table_state"]
 
 
+@router.get("/table/view")
+async def get_table_view():
+    """Get simplified table overhead view data for phone app."""
+    balls = system_state.get("table_state", {}).get("balls", [])
+    table = system_state.get("table_state", {})
+    return {
+        "detected": table.get("detected", False),
+        "ball_count": len(balls),
+        "cue_speed": table.get("last_cue_speed", 0),
+        "balls": [
+            {
+                "x": float(b.get("x", 0)),
+                "y": float(b.get("y", 0)),
+                "type": "cue" if b.get("is_cue") else
+                        "black" if b.get("is_black") else
+                        "solid" if b.get("is_solid") else "stripe",
+                "color": b.get("color", ""),
+            }
+            for b in balls
+        ],
+    }
+
+
 @router.post("/mode")
 async def set_mode(req: ModeRequest):
     valid_modes = ["idle", "match", "training", "challenge"]

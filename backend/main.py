@@ -260,6 +260,7 @@ class PoolARSystem:
                             manager.broadcast_announce(shot_data["feedback"]), self._loop,
                         )
                     self._training_processed = True
+                    self.training_mode.save_history()
 
             # 4. AI training: auto-advance to next drill
             ai = system_state.get("ai_training", {})
@@ -297,6 +298,7 @@ class PoolARSystem:
         # 6. Match mode: 一次性处理所有进袋球
         if current_mode == "match" and match_potted:
             self.match_mode.process_shot(match_potted, match_foul)
+            self.match_mode.save_history()
             if self._loop:
                 asyncio.run_coroutine_threadsafe(
                     manager.broadcast_score(), self._loop,

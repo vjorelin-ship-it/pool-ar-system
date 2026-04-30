@@ -15,6 +15,31 @@ class ConnectionManager:
     async def connect_phone(self, ws: WebSocket) -> None:
         await ws.accept()
         self._phone_clients.add(ws)
+        # Send current state on connect (for refresh/reconnect)
+        try:
+            balls = system_state.get("table_state", {}).get("balls", [])
+            if balls:
+                await ws.send_text(json.dumps({
+                    "type": "table_state",
+                    "data": {"balls": balls, "ball_count": len(balls),
+                             "detected": system_state["table_state"].get("detected", False)},
+                }))
+            mm = system_state.get("match_mode")
+            if mm and mm.state:
+                await ws.send_text(json.dumps({
+                    "type": "score_update",
+                    "data": {
+                        "player1_score": mm.state.player1_score,
+                        "player2_score": mm.state.player2_score,
+                        "current_player": mm.state.current_player,
+                        "player1_balls": mm.state.player1_balls,
+                        "player2_balls": mm.state.player2_balls,
+                        "game_over": mm.state.game_over,
+                        "winner": mm.state.winner,
+                    },
+                }))
+        except Exception:
+            pass
 
     async def connect_projector(self, ws: WebSocket) -> None:
         await ws.accept()

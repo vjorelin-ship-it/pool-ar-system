@@ -145,6 +145,30 @@ class TrainingMode:
     def _distance(a: Tuple[float, float], b: Tuple[float, float]) -> float:
         return ((a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2) ** 0.5
 
+    def save_history(self, path: str = "") -> bool:
+        """Save training session history to JSON file."""
+        import json as _json
+        import os as _os
+        from datetime import datetime as _dt
+        p = path or _os.path.join(_os.path.dirname(__file__), '..', 'learning', 'training_history.json')
+        try:
+            s = self.session
+            data = {
+                "current_level": s.current_level,
+                "current_drill": s.current_drill_idx,
+                "consecutive_successes": s.consecutive_successes,
+                "total_attempts": s.total_attempts,
+                "total_successes": s.total_successes,
+                "completed_levels": s.completed_levels,
+                "challenge_mode": s.challenge_mode,
+                "last_updated": _dt.now().isoformat(),
+            }
+            with open(p, 'w', encoding='utf-8') as f:
+                _json.dump(data, f, ensure_ascii=False, indent=2)
+            return True
+        except Exception:
+            return False
+
     @staticmethod
     def _is_in_landing_zone(pos: Tuple[float, float],
                             zone: Tuple[float, float, float, float]) -> bool:

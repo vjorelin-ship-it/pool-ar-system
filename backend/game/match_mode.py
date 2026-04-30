@@ -1,9 +1,14 @@
 from dataclasses import dataclass, field
 from typing import List, Optional, Dict, Any
+import json as _json
+import os as _os
+from datetime import datetime as _dt
 
 
 @dataclass
 class MatchState:
+    player1_name: str = ""
+    player2_name: str = ""
     player1_score: int = 0
     player2_score: int = 0
     current_player: int = 1       # 1 or 2
@@ -39,6 +44,10 @@ class MatchMode:
 
     def start_new_match(self, *args) -> None:
         self.state = MatchState()
+        if len(args) >= 1:
+            self.state.player1_name = str(args[0])
+        if len(args) >= 2:
+            self.state.player2_name = str(args[1])
 
     def process_shot(self, potted_balls: List[Dict[str, Any]],
                      is_foul: bool = False, is_break: bool = False) -> dict:
@@ -187,3 +196,25 @@ class MatchMode:
                 results.append({"type": "early_eight", "desc": "黑8提前进袋"})
 
         return results[0] if results else None
+
+    def save_history(self, path: str = "") -> bool:
+        """Save match history to JSON file."""
+        p = path or _os.path.join(_os.path.dirname(__file__), '..', 'learning', 'match_history.json')
+        try:
+            data = {
+                "player1_name": self.state.player1_name,
+                "player2_name": self.state.player2_name,
+                "player1_score": self.state.player1_score,
+                "player2_score": self.state.player2_score,
+                "winner": self.state.winner,
+                "game_over": self.state.game_over,
+                "player1_balls": self.state.player1_balls,
+                "player2_balls": self.state.player2_balls,
+                "history": self.state.history[-50:],  # keep last 50 events
+                "last_updated": _dt.now().isoformat(),
+            }
+            with open(p, 'w', encoding='utf-8') as f:
+                _json.dump(data, f, ensure_ascii=False, indent=2)
+            return True
+        except Exception:
+            return False
