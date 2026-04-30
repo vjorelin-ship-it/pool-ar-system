@@ -37,6 +37,13 @@ class ConnectionManager:
                         "winner": mm.state.winner,
                     },
                 }))
+            # Send pocketed balls history (for scoreboard refresh sync)
+            pb = system_state.get("pocketed_balls", [])
+            if pb:
+                await ws.send_text(json.dumps({
+                    "type": "pocketed_history",
+                    "data": pb,
+                }))
         except Exception:
             pass
 

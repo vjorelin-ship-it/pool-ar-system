@@ -35,6 +35,7 @@ system_state = {
         "detected": False,
         "balls": [],
     },
+    "pocketed_balls": [],  # persisted across session for refresh/reconnect sync
 }
 
 import threading

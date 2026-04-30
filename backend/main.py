@@ -203,6 +203,16 @@ class PoolARSystem:
         cue_pocketed = False
 
         for ev in events:
+            # 0. Record to persisted history (for scoreboard refresh/reconnect)
+            pocketed_entry = {
+                "color": ev.color,
+                "is_stripe": ev.is_stripe,
+                "is_solid": ev.is_solid,
+                "is_black": ev.is_black,
+                "is_cue": ev.is_cue,
+            }
+            system_state["pocketed_balls"].append(pocketed_entry)
+
             # 1. Broadcast to phone app (per-event)
             if self._loop:
                 asyncio.run_coroutine_threadsafe(

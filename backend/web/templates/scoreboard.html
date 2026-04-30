@@ -211,6 +211,13 @@ function connectWS() {
         document.getElementById('trainingSection').style.display = 'none';
       }
 
+      if (msg.type === 'pocketed_history' && msg.data) {
+        // Restore pocketed balls on refresh/reconnect
+        pocketedBalls = msg.data.slice();
+        renderBallGrid(pocketedBalls);
+        document.getElementById('ballSection').style.display = 'block';
+      }
+
       if (msg.type === 'pocket_event' && msg.data) {
         const d = msg.data;
         pocketedBalls.push(msg.data);
