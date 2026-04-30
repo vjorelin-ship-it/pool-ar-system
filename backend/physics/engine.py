@@ -58,8 +58,8 @@ class PhysicsEngine:
     AIM_OFFSET: float = BALL_RADIUS * 2.0     # 幽灵球法：母球在接触点位置
 
     POCKETS: List[Vec2] = [
-        Vec2(0.0, 0.0), Vec2(0.5, 0.0), Vec2(1.0, 0.0),
-        Vec2(0.0, 1.0), Vec2(0.5, 1.0), Vec2(1.0, 1.0),
+        Vec2(0.015, 0.015), Vec2(0.5, 0.015), Vec2(0.985, 0.015),
+        Vec2(0.015, 0.985), Vec2(0.5, 0.985), Vec2(0.985, 0.985),
     ]
 
     # ─── 直接球 ────────────────────────────────────────────────────
@@ -163,9 +163,9 @@ class PhysicsEngine:
             if not self._on_cushion_edge(bounce, side_name):
                 continue
 
-            # 速度计算（翻袋需更大力度）
+            # Velocity scales with cushion restitution
             dist_to_aim = cue_pos.dist_to(aim_point)
-            cue_speed = self._speed_from_distance(dist_to_aim) * 1.2
+            cue_speed = self._speed_from_distance(dist_to_aim) * (2.0 - self.CUSHION_RESTITUTION)
             target_speed = cue_speed * 0.5
 
             # 母球停点
@@ -354,16 +354,13 @@ class PhysicsEngine:
 
     def _estimate_cue_stop(self, cue_start: Vec2, aim_point: Vec2,
                            speed: float) -> Vec2:
-        """估算母球停点（基于摩擦减速）
-
-        停点距离 ≈ v² / (2 * friction * g)
-        摩擦减速: a = friction * g (其中 g 归一化为 1)
-        """
         if speed < 0.01:
             return cue_start
         dir_n = (aim_point - cue_start).normalized()
-        stop_dist = speed ** 2 / (2 * self.BALL_FRICTION * 1.0)
-        stop_dist = min(stop_dist, 0.5)  # 限制最大走位距离
+        # Energy after collision with target ball (momentum transfer)
+        post_collision_speed = speed * (1.0 - self.CUSHION_RESTITUTION * 0.6)
+        stop_dist = post_collision_speed ** 2 / (2 * self.BALL_FRICTION * 1.0)
+        stop_dist = min(stop_dist, 0.5)
         return cue_start + dir_n * stop_dist
 
     @staticmethod

@@ -1,6 +1,25 @@
 from fastapi import APIRouter, HTTPException, Request
 from typing import Optional
 from config import settings
+from pydantic import BaseModel, Field
+
+
+class ModeRequest(BaseModel):
+    mode: str = Field(..., pattern="^(idle|match|training|challenge)$")
+
+
+class TrainingLevelRequest(BaseModel):
+    level: int = Field(..., ge=1, le=10)
+
+
+class PlacementRequest(BaseModel):
+    cue_pos: list = Field(..., min_length=2, max_length=2)
+    target_pos: list = Field(..., min_length=2, max_length=2)
+
+
+class ModelConfigRequest(BaseModel):
+    condition_physics: bool = False
+
 
 router = APIRouter(prefix="/api")
 
@@ -40,22 +59,22 @@ async def get_table():
 
 
 @router.post("/mode")
-async def set_mode(mode: str):
+async def set_mode(req: ModeRequest):
     valid_modes = ["idle", "match", "training", "challenge"]
-    if mode not in valid_modes:
+    if req.mode not in valid_modes:
         raise HTTPException(400, f"Invalid mode. Valid: {valid_modes}")
-    system_state["current_mode"] = mode
-    if mode == "match" and system_state.get("match_mode"):
+    system_state["current_mode"] = req.mode
+    if req.mode == "match" and system_state.get("match_mode"):
         system_state["match_mode"].start_new_match()
-    if mode == "challenge" and system_state.get("training_mode"):
+    if req.mode == "challenge" and system_state.get("training_mode"):
         info = system_state["training_mode"].start_challenge()
-        return {"mode": mode, "info": info}
-    if mode == "training" and system_state.get("training_mode"):
+        return {"mode": req.mode, "info": info}
+    if req.mode == "training" and system_state.get("training_mode"):
         # Training mode: all levels accessible, not challenge-locked
         tm = system_state["training_mode"]
         tm.session.challenge_mode = False
-        return {"mode": mode, "info": "Select a level"}
-    return {"mode": mode}
+        return {"mode": req.mode, "info": "Select a level"}
+    return {"mode": req.mode}
 
 
 @router.post("/control/start")
@@ -101,11 +120,11 @@ async def get_training_levels():
 
 
 @router.post("/training/select-level")
-async def select_training_level(level: int):
+async def select_training_level(req: TrainingLevelRequest):
     tm = system_state.get("training_mode")
     if not tm:
         raise HTTPException(400, "Training mode not initialized")
-    result = tm.select_level(level)
+    result = tm.select_level(req.level)
     if "error" in result:
         raise HTTPException(400, result["error"])
     # Broadcast drill info via WebSocket to phone clients
@@ -116,11 +135,11 @@ async def select_training_level(level: int):
 
 
 @router.post("/training/verify-placement")
-async def verify_placement(cue_pos: list, target_pos: list):
+async def verify_placement(req: PlacementRequest):
     tm = system_state.get("training_mode")
     if not tm:
         raise HTTPException(400, "Training mode not initialized")
-    return tm.verify_placement(tuple(cue_pos), tuple(target_pos))
+    return tm.verify_placement(tuple(req.cue_pos), tuple(req.target_pos))
 
 
 from fastapi import WebSocket, WebSocketDisconnect
@@ -250,7 +269,8 @@ async def get_annotate_labels(name: str):
     path = _os.path.join(_LABEL_DIR, name)
     if not _os.path.isfile(path):
         return PlainTextResponse("", status_code=200)
-    return PlainTextResponse(open(path).read())
+    with open(path) as f:
+        return PlainTextResponse(f.read())
 
 
 @router.post("/annotate/save/{name}")

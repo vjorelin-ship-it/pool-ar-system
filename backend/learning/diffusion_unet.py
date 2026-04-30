@@ -9,6 +9,8 @@ Input:  noise trajectory (B, N_balls, N_frames, coord_dim)
 Output: predicted noise (B, N_balls, N_frames, coord_dim)
 """
 
+from __future__ import annotations
+
 import math
 import torch
 import torch.nn as nn

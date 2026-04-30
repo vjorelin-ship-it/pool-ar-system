@@ -43,8 +43,12 @@ class ShotDataset:
 
     def split(self, train_ratio: float = 0.8
               ) -> Tuple[List[Sample], List[Sample]]:
-        n = int(len(self._samples) * train_ratio)
-        return self._samples[:n], self._samples[n:]
+        """Split into train/val sets with shuffle."""
+        import random
+        shuffled = list(self._samples)
+        random.shuffle(shuffled)
+        n = int(len(shuffled) * train_ratio)
+        return shuffled[:n], shuffled[n:]
 
     def save(self, path: str = "") -> None:
         path = path or self._save_path
