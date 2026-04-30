@@ -186,7 +186,11 @@ class PhysicsEngine:
                 bounce_point=bounce,
             )
 
-            score = dist_target_pocket
+            # Score = total path length (cue→aim + target→phantom)
+            # Prefer shorter total paths; differentiates between cushions
+            dist_cue_to_aim = cue_pos.dist_to(aim_point)
+            dist_target_to_phantom = target_pos.dist_to(phantom)
+            score = dist_cue_to_aim + dist_target_to_phantom
             if score < best_score:
                 best_score = score
                 best_shot = shot

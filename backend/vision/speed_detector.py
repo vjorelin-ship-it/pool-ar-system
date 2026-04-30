@@ -29,21 +29,19 @@ class SpeedDetector:
     """
 
     def __init__(self, window_size: int = 10,
-                 motion_threshold: float = 0.003,
-                 fps: float = 10.0):
+                 motion_threshold: float = 0.003):
         """
         Args:
             window_size: 历史位置缓存帧数
             motion_threshold: 判定为运动的最小位移(归一化坐标)
-            fps: 摄像头帧率，用于时间换算
         """
         self._window_size = window_size
         self._motion_threshold = motion_threshold
-        self._fps = fps
         self._history: deque = deque(maxlen=window_size)
         self._last_speed: float = 0.0
         self._was_moving = False
         self._stationary_frames = 0
+        self._stationary_count = 0
         self._recording = False
         self._record_buffer: List[Tuple[float, float, float]] = []  # (x, y, t)
 
@@ -73,20 +71,24 @@ class SpeedDetector:
             self._record_buffer = [(cue_ball_x, cue_ball_y, now)]
             self._was_moving = True
             self._stationary_frames = 0
+            self._stationary_count = 0
 
         elif self._was_moving and is_moving and self._recording:
             # 运动中：记录轨迹
             self._record_buffer.append((cue_ball_x, cue_ball_y, now))
 
         elif self._was_moving and not is_moving:
-            # 运动结束：母球停下，计算速度
-            self._was_moving = False
-            if self._recording and len(self._record_buffer) >= 2:
-                speed = self._compute_speed()
+            # 运动结束：需要连续2帧静止才判定停止（避免检测抖动）
+            self._stationary_count += 1
+            if self._stationary_count >= 2:
+                self._was_moving = False
+                self._stationary_count = 0
+                if self._recording and len(self._record_buffer) >= 2:
+                    speed = self._compute_speed()
+                    self._recording = False
+                    self._last_speed = speed
+                    return speed
                 self._recording = False
-                self._last_speed = speed
-                return speed
-            self._recording = False
 
         elif not self._was_moving and not is_moving:
             self._stationary_frames += 1
@@ -113,6 +115,7 @@ class SpeedDetector:
         self._was_moving = False
         self._recording = False
         self._stationary_frames = 0
+        self._stationary_count = 0
 
     def _compute_speed(self) -> float:
         """从记录缓冲计算母球初速度"""

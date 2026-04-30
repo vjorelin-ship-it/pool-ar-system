@@ -11,13 +11,13 @@ CALIBRATION_FILE = os.path.join(os.path.dirname(__file__), "calibration_data.jso
 
 
 def save_calibration(corners: List[Tuple[float, float]],
-                     homography: List[List[float]],
-                     markers: List[Tuple[float, float]]) -> bool:
+                     homography: Optional[List[List[float]]] = None,
+                     markers: Optional[List[Tuple[float, float]]] = None) -> bool:
     """原子写入校准结果"""
     data = {
         "corners": [[float(x), float(y)] for x, y in corners],
-        "homography": [list(row) for row in homography],
-        "markers": [[float(x), float(y)] for x, y in markers],
+        "homography": [list(row) for row in homography] if homography else [],
+        "markers": [[float(x), float(y)] for x, y in markers] if markers else [],
     }
     try:
         tmp = CALIBRATION_FILE + ".tmp"

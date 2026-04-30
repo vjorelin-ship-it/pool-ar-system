@@ -201,7 +201,11 @@ class PoolARSystem:
                     manager.broadcast_announce(text), self._loop,
                 )
 
-            # 3. Training mode: auto-judge shot result (first target ball only)
+            # 3. Training mode: auto-judge shot result
+            # NOTE: Currently marks target_pocketed=True for any solid/stripe pocketed.
+            # TODO: Verify pocketed ball matches drill target by color/position.
+            # The drill defines a target position; we should confirm the ball pocketed
+            # at that position matches the expected target before marking success.
             if current_mode in ("training", "challenge"):
                 if (ev.is_solid or ev.is_stripe) and not hasattr(self, '_training_processed'):
                     drill = self.training_mode.session.get_current_drill()
@@ -442,7 +446,11 @@ class PoolARSystem:
             corners_list = [(float(p[0]), float(p[1]))
                             for p in self._last_table_corners]
             try:
-                save_calibration(corners_list, [[0]], markers)
+                # Save calibration (homography computed from marker detection)
+                # The homography matrix maps between camera and projector coords.
+                # Currently placeholder — a proper homography requires detecting
+                # projected markers in the camera image and computing the transform.
+                save_calibration(corners_list, [], markers)
                 cal["saved"] = True
                 print("[Calibration] Saved to disk")
             except Exception as e:
