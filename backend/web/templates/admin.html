@@ -201,7 +201,10 @@
       <div style="text-align:center"><div style="color:var(--info);font-size:22px" id="ballAnnotated">—</div><div style="color:var(--text-dim);font-size:10px">已标注</div></div>
       <div style="text-align:center"><div style="color:var(--text-dim);font-size:22px" id="ballTrained">—</div><div style="color:var(--text-dim);font-size:10px">已训练</div></div>
     </div>
-    <input class="dir-input" id="ballMlDir" onchange="updateDir('ball_ml_data_dir', this.value)">
+    <div style="display:flex;gap:4px;align-items:center">
+      <input class="dir-input" id="ballMlDir" readonly style="flex:1">
+      <button class="btn" onclick="changeDir('ball_ml_data_dir','球检测素材目录')" style="flex-shrink:0">📁</button>
+    </div>
     <div class="btn-group">
       <button class="btn accent" onclick="captureFrame()">📷 手动截帧</button>
       <button class="btn" onclick="window.open('/annotate','_blank')">✎ 标注工具</button>
@@ -214,7 +217,10 @@
     <div class="stat-row"><span class="stat-label">后台录制</span><span class="stat-value" id="trajColState">已停止</span></div>
     <div class="stat-row"><span class="stat-label">已采集</span><span class="stat-value green" id="trajColCount">0</span> 杆</div>
     <div class="stat-row"><span class="stat-label">录制中</span><span class="stat-value" id="trajRecording">—</span></div>
-    <input class="dir-input" id="trajDir" onchange="updateDir('trajectory_data_dir', this.value)">
+    <div style="display:flex;gap:4px;align-items:center">
+      <input class="dir-input" id="trajDir" readonly style="flex:1">
+      <button class="btn" onclick="changeDir('trajectory_data_dir','轨迹数据目录')" style="flex-shrink:0">📁</button>
+    </div>
     <div class="btn-group">
       <button class="btn accent" onclick="apiCall('POST','/api/collector/start')">▶ 后台录制</button>
       <button class="btn danger" onclick="apiCall('POST','/api/collector/stop')">■ 停止录制</button>
@@ -227,8 +233,13 @@
     <div class="card-title">■ 轨迹模型训练</div>
     <div class="stat-row"><span class="stat-label">模型状态</span><span class="stat-value" id="trajModelStatus">—</span></div>
     <div class="stat-row"><span class="stat-label">参数量</span><span class="stat-value" id="trajParamCount">—</span></div>
-    <div class="stat-row"><span class="stat-label">训练数据量</span><span class="stat-value" id="trajTrainCount">—</span></div>
     <div class="stat-row"><span class="stat-label">设备</span><span class="stat-value" id="trajDevice">—</span></div>
+    <div style="margin:6px 0;padding:6px 0;border-top:1px solid var(--border);border-bottom:1px solid var(--border)">
+      <div class="stat-row"><span class="stat-label">已采集(未训练)</span><span class="stat-value green" id="statUntrained">—</span></div>
+      <div class="stat-row"><span class="stat-label">已训练</span><span class="stat-value" id="statTrained">—</span></div>
+      <div class="stat-row"><span class="stat-label">总计</span><span class="stat-value" id="statTotal">—</span></div>
+      <div class="stat-row"><span class="stat-label">磁盘占用</span><span class="stat-value" id="statStorage">—</span></div>
+    </div>
     <div class="btn-group">
       <button class="btn accent" onclick="apiCall('POST','/api/model/pretrain')">◆ 合成预训练</button>
       <button class="btn warn" onclick="apiCall('POST','/api/model/finetune')">▲ 真实数据微调</button>
@@ -444,10 +455,27 @@ async function loadDirs() {
       }
       // Trajectory counts
       if (d.trajectory) {
-        document.getElementById('trajColCount').textContent = d.trajectory.new || 0;
+        const n = d.trajectory.new || 0;
+        const t = d.trajectory.trained || 0;
+        document.getElementById('trajColCount').textContent = n;
+        document.getElementById('statUntrained').textContent = n + ' 杆';
+        document.getElementById('statTrained').textContent = t + ' 杆';
+        document.getElementById('statTotal').textContent = (n + t) + ' 杆';
+        document.getElementById('statStorage').textContent =
+          (d.trajectory.total_size_mb || 0).toFixed(1) + ' MB';
       }
     }
   } catch(_) {}
+}
+
+async function changeDir(key, label) {
+  const current = document.getElementById(key === 'ball_ml_data_dir' ? 'ballMlDir' : 'trajDir').value;
+  const path = prompt(`${label}\n请输入新的存储路径:`, current);
+  if (path && path.trim() && path !== current) {
+    await apiCall('POST', '/api/config/training-dirs', { [key]: path.trim() });
+    loadDirs();
+    log(`目录已更新: ${path.trim()}`, 'success');
+  }
 }
 
 async function updateDir(key, value) {

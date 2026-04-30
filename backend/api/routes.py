@@ -321,23 +321,50 @@ def _count_files(d: str, ext: str) -> int:
     return len([f for f in _os.listdir(d) if f.endswith(ext)])
 
 
+def _dir_size_mb(d: str) -> float:
+    """Total size of directory in MB, recursive."""
+    if not _os.path.isdir(d):
+        return 0.0
+    total = 0
+    for root, _, files in _os.walk(d):
+        for f in files:
+            try:
+                total += _os.path.getsize(_os.path.join(root, f))
+            except OSError:
+                pass
+    return total / (1024 * 1024)
+
+
 # ── Config endpoints ──
 
 @router.get("/config/training-dirs")
 async def get_training_dirs():
     """获取训练数据目录状态（含各子目录文件数）"""
+    raw_cnt = _count_files(_get_ball_raw_dir(), ".jpg")
+    ann_img = _count_files(_get_ball_annotated_img_dir(), ".jpg")
+    ann_lbl = _count_files(_get_ball_annotated_label_dir(), ".txt")
+    trained_ball = _count_files(_get_ball_trained_dir(), ".jpg")
+    traj_new_cnt = _count_files(_get_traj_new_dir(), ".json")
+    traj_trained_cnt = _count_files(_get_traj_trained_dir(), ".json")
+
     return {
         "ball_ml_data_dir": _settings.BALL_ML_DATA_DIR,
         "ball_ml": {
-            "raw": _count_files(_get_ball_raw_dir(), ".jpg"),
-            "annotated_images": _count_files(_get_ball_annotated_img_dir(), ".jpg"),
-            "annotated_labels": _count_files(_get_ball_annotated_label_dir(), ".txt"),
-            "trained": _count_files(_get_ball_trained_dir(), ".jpg"),
+            "raw": raw_cnt,
+            "annotated_images": ann_img,
+            "annotated_labels": ann_lbl,
+            "trained": trained_ball,
+            "total_size_mb": round(
+                _dir_size_mb(_get_ball_ml_dir()), 2),
         },
         "trajectory_data_dir": _settings.TRAJECTORY_DATA_DIR,
         "trajectory": {
-            "new": _count_files(_get_traj_new_dir(), ".json"),
-            "trained": _count_files(_get_traj_trained_dir(), ".json"),
+            "new": traj_new_cnt,
+            "trained": traj_trained_cnt,
+            "untrained": traj_new_cnt,
+            "total_new_mb": round(_dir_size_mb(_get_traj_new_dir()), 2),
+            "total_trained_mb": round(_dir_size_mb(_get_traj_trained_dir()), 2),
+            "total_size_mb": round(_dir_size_mb(_get_traj_dir()), 2),
         },
     }
 
