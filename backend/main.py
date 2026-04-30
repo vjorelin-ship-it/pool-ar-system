@@ -30,6 +30,7 @@ from vision.table_detector import TableDetector
 from vision.ball_detector import BallDetector
 from vision.pocket_detector import PocketDetector
 from vision.speed_detector import SpeedDetector
+from vision.player_identifier import PlayerIdentifier
 from learning.data_collector import DataCollector
 from learning.physics_adapter import PhysicsAdapter
 from learning.diffusion_model import DiffusionTrajectoryModel
@@ -51,6 +52,7 @@ class PoolARSystem:
         self.renderer = ProjectorRenderer()
         self.pocket_detector = PocketDetector()
         self.speed_detector = SpeedDetector()
+        self.player_identifier = PlayerIdentifier()
         self.announcer = Announcer()
         self.data_collector = DataCollector()
         self.physics_adapter = PhysicsAdapter()
@@ -328,36 +330,132 @@ class PoolARSystem:
 
         # 6. Match mode: process shot with full foul detection
         if current_mode == "match" and (match_potted or match_foul):
+            s = self.match_mode.state
+
+            # 识别击球选手（如果已注册）
+            identified_player = None
+            cue_ball = next((b for b in balls if hasattr(b, 'is_cue') and b.is_cue), None)
+            if cue_ball and self.player_identifier.is_registered:
+                # 获取warped帧和母球位置
+                warped_frame = system_state.get("last_warped_frame")
+                if warped_frame is not None:
+                    identified_player = self.player_identifier.identify(
+                        warped_frame, (cue_ball.x, cue_ball.y))
+
+            # 检测轮次错误
+            wrong_player = False
+            if identified_player and identified_player != s.current_player:
+                wrong_player = True
+
             result = self.match_mode.process_shot(
                 match_potted, is_foul=match_foul,
-                cue_pocketed=match_foul,
+                cue_pocketed=cue_pocketed,
+                wrong_player=wrong_player,
             )
             self.match_mode.save_history()
 
-            # Foul announcement
-            if result.get("foul"):
-                foul_text = self.announcer.foul_announce(
-                    [{"desc": "犯规", "severity": "foul"}])
-                if self._loop:
+            # ── 完整播报 ──
+            ann = result.get("announce", {})
+            phase = ann.get("phase", "")
+            opp = 2 if s.current_player == 1 else 1
+
+            if phase == "foul":
+                foul_types = ann.get("foul_types", [])
+                foul_text = self._build_foul_announce(foul_types, s, opp)
+                if self._loop and foul_text:
                     asyncio.run_coroutine_threadsafe(
                         manager.broadcast_announce(foul_text), self._loop)
-            if result.get("free_ball"):
-                fb_text = self.announcer.free_ball_announce()
+                if result.get("free_ball"):
+                    fb_text = self.announcer.free_ball()
+                    if self._loop:
+                        asyncio.run_coroutine_threadsafe(
+                            manager.broadcast_announce(fb_text), self._loop)
+
+            elif phase == "pot":
+                if ann.get("continue"):
+                    text = self.announcer.continue_player(s.current_player)
+                    if self._loop:
+                        asyncio.run_coroutine_threadsafe(
+                            manager.broadcast_announce(text), self._loop)
+                elif ann.get("switch"):
+                    text = self.announcer.switch_player(s.current_player)
+                    if self._loop:
+                        asyncio.run_coroutine_threadsafe(
+                            manager.broadcast_announce(text), self._loop)
+
+            elif phase == "miss":
+                text = self.announcer.switch_player(s.current_player)
                 if self._loop:
                     asyncio.run_coroutine_threadsafe(
-                        manager.broadcast_announce(fb_text), self._loop)
+                        manager.broadcast_announce(text), self._loop)
+
+            # 僵局警告
+            if s.consecutive_misses >= 5 and not s.game_over:
+                if self._loop:
+                    asyncio.run_coroutine_threadsafe(
+                        manager.broadcast_announce(
+                            self.announcer.stalemate_warning(s.consecutive_misses)),
+                        self._loop)
 
             if self._loop:
                 asyncio.run_coroutine_threadsafe(
                     manager.broadcast_score(), self._loop,
                 )
-            if self.match_mode.state.game_over:
-                winner = self.match_mode.state.winner or 1
-                v_text = self.announcer.victory(winner)
+
+            # 胜负播报
+            if s.game_over:
+                winner = s.winner or 1
+                if ann.get("phase") == "foul" and ann.get("is_loss"):
+                    v_text = self.announcer.game_win_by_foul(winner)
+                else:
+                    v_text = self.announcer.game_win(winner)
                 if self._loop:
                     asyncio.run_coroutine_threadsafe(
                         manager.broadcast_announce(v_text), self._loop,
                     )
+                # 检查是否达到目标局数
+                winner_score = s.player1_score if winner == 1 else s.player2_score
+                loser_score = s.player2_score if winner == 1 else s.player1_score
+                if winner_score >= s.target_wins:
+                    final_text = self.announcer.match_win(winner,
+                        f"{winner_score}比{loser_score}")
+                    if self._loop:
+                        asyncio.run_coroutine_threadsafe(
+                            manager.broadcast_announce(final_text), self._loop,
+                        )
+
+    def _build_foul_announce(self, foul_types: list, state, opponent: int) -> str:
+        """根据犯规类型生成完整播报文字"""
+        if not foul_types:
+            return ""
+        # 按严重程度排序：致命犯规优先
+        for ft in foul_types:
+            if ft == "early_eight":
+                return self.announcer.black8_loss_early(state.current_player)
+            elif ft == "black8_off_table":
+                return self.announcer.black8_loss_off_table(state.current_player)
+            elif ft == "black8_foul":
+                return self.announcer.black8_foul_but_safe(opponent)
+        # 普通犯规
+        for ft in foul_types:
+            if ft == "cue_pocketed":
+                return self.announcer.foul_cue_pocketed(opponent)
+            elif ft == "wrong_player":
+                return self.announcer.foul_wrong_turn(state.current_player, opponent)
+            elif ft == "no_cushion":
+                return self.announcer.foul_no_cushion(opponent)
+            elif ft == "open_8ball":
+                return self.announcer.foul_open_8ball(opponent)
+            elif ft == "ball_off_table":
+                return self.announcer.foul_ball_off_table(opponent)
+            elif ft == "opponent_ball":
+                return self.announcer.foul_player(
+                    state.current_player, opponent, "打进对方球")
+            elif ft == "no_hit":
+                return self.announcer.foul_player(
+                    state.current_player, opponent, "未命中目标球")
+        # fallback
+        return self.announcer.foul_player(state.current_player, opponent)
 
     def _render_ai_training(self) -> str:
         """渲染AI训练题到投影"""
@@ -768,6 +866,10 @@ class PoolARSystem:
 
                     # Ball detection pipeline (every 3 frames)
                     if do_full and balls is not None:
+                        # Store warped frame for player identification
+                        if warped is not None:
+                            system_state["last_warped_frame"] = warped
+
                         # Pocket detection
                         self._handle_pocket_events(balls)
 

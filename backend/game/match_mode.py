@@ -24,6 +24,9 @@ class MatchState:
     history: List[dict] = field(default_factory=list)
     p1_remaining: int = 0
     p2_remaining: int = 0
+    # 僵局计数
+    consecutive_misses: int = 0  # 连续无进球杆数
+    target_wins: int = 5  # 目标胜局数（先达到此局数者获胜）
 
     def switch_player(self) -> None:
         self.current_player = 2 if self.current_player == 1 else 1
@@ -52,50 +55,102 @@ class MatchMode:
 
     def process_shot(self, potted_balls: List[Dict[str, Any]],
                      is_foul: bool = False, cue_pocketed: bool = False,
-                     no_ball_hit: bool = False) -> dict:
-        """Process a shot with full foul detection.
+                     no_ball_hit: bool = False, no_cushion: bool = False,
+                     ball_off_table: bool = False, wrong_player: bool = False) -> dict:
+        """Process a shot with full foul detection (CTBA 2025 rules).
 
         Args:
             potted_balls: list of pocketed balls with {is_solid, is_stripe, is_black, is_cue}
-            is_foul: pre-detected foul (e.g. from vision)
-            cue_pocketed: cue ball went in pocket
-            no_ball_hit: no ball was contacted
+            is_foul: pre-detected foul
+            cue_pocketed: cue ball in pocket
+            no_ball_hit: no ball contacted
+            no_cushion: no ball hit cushion after contact (CTBA rule)
+            ball_off_table: ball left the table
+            wrong_player: wrong player shooting (from vision)
 
-        Returns action dict.
+        Returns action dict with announce tags.
         """
         s = self.state
+        prev_player = s.current_player
+        prev_game_over = s.game_over
 
         # Detect all fouls
         fouls = self.detect_fouls(potted_balls, cue_pocketed=cue_pocketed,
-                                   no_ball_hit=no_ball_hit)
+                                   no_ball_hit=no_ball_hit, no_cushion=no_cushion,
+                                   ball_off_table=ball_off_table, wrong_player=wrong_player)
 
         s.record_shot(potted_balls, is_foul or len(fouls) > 0)
+
+        # 僵局计数
+        has_pocket = bool(potted_balls) and not (len(fouls) > 0 and any(
+            f.get("severity") == "loss" for f in fouls))
+        if has_pocket:
+            s.consecutive_misses = 0
+        else:
+            s.consecutive_misses += 1
+
+        ann = {}  # announcer tags
 
         # Break shot
         if s.is_break_shot:
             s.is_break_shot = False
+            ann["phase"] = "break"
             if fouls:
-                return self.apply_fouls(fouls)
+                result = self.apply_fouls(fouls)
+                result["announce"] = ann
+                return result
             if potted_balls:
-                return self._handle_break(potted_balls)
+                ann["break_potted"] = True
+                result = self._handle_break(potted_balls)
+                result["announce"] = ann
+                return result
             s.switch_player()
-            return {"action": "switch_player", "player": s.current_player}
+            ann["switch"] = True
+            return {"action": "switch_player", "player": s.current_player,
+                    "announce": ann}
 
         # Foul handling
         if fouls:
-            return self.apply_fouls(fouls)
+            ann["phase"] = "foul"
+            ann["foul_types"] = [f["type"] for f in fouls]
+            ann["foul_descs"] = [f["desc"] for f in fouls]
+            is_loss = any(f.get("severity") == "loss" for f in fouls)
+            ann["is_loss"] = is_loss
+            # Check if it's black8-related foul
+            ann["is_black8"] = any(
+                f.get("type") in ("early_eight", "black8_foul") for f in fouls)
+            result = self.apply_fouls(fouls)
+            result["announce"] = ann
+            return result
         if is_foul:
             s.switch_player()
+            ann["phase"] = "foul"
+            ann["switch"] = True
             return {"action": "switch_player", "player": s.current_player,
-                    "foul": True}
+                    "foul": True, "announce": ann}
 
         # Potted balls
         if potted_balls:
-            return self._handle_pot(potted_balls)
+            ann["phase"] = "pot"
+            result = self._handle_pot(potted_balls)
+            if result.get("action") == "continue":
+                ann["continue"] = True
+            elif result.get("action") == "win":
+                ann["game_win"] = True
+            elif result.get("action") == "lose":
+                ann["game_lose"] = True
+                ann["lose_reason"] = result.get("reason", "")
+            elif result.get("action") == "switch_player":
+                ann["switch"] = True
+            result["announce"] = ann
+            return result
 
         # Miss
         s.switch_player()
-        return {"action": "switch_player", "player": s.current_player}
+        ann["phase"] = "miss"
+        ann["switch"] = True
+        return {"action": "switch_player", "player": s.current_player,
+                "announce": ann}
 
     def _handle_break(self, potted: List[Dict[str, Any]]) -> dict:
         """Assign ball groups based on first pocketed ball after break."""
@@ -167,18 +222,50 @@ class MatchMode:
             self.state.p2_remaining = max(0, self.state.p2_remaining - 1)
 
     def detect_fouls(self, potted: list, cue_pocketed: bool = False,
-                     no_ball_hit: bool = False) -> list:
-        """Detect all fouls. Returns list of {type, desc, severity}."""
+                     no_ball_hit: bool = False, no_cushion: bool = False,
+                     ball_off_table: bool = False, wrong_player: bool = False) -> list:
+        """Detect all fouls per CTBA 2025 rules. Returns list of {type, desc, severity}."""
         results = []
         s = self.state
+
+        # 白球进袋 / 飞台
         if cue_pocketed:
             results.append({"type": "cue_pocketed", "desc": "白球进袋", "severity": "foul"})
+
+        # 未命中目标球
         if no_ball_hit:
             results.append({"type": "no_hit", "desc": "未命中目标球", "severity": "foul"})
+
+        # 无球碰库（CTBA: 无进球时至少一球碰库）
+        if no_cushion and not potted:
+            results.append({"type": "no_cushion", "desc": "击球后无球碰库", "severity": "foul"})
+
+        # 球飞台
+        if ball_off_table:
+            for b in potted:
+                if b.get("is_black"):
+                    results.append({"type": "black8_off_table", "desc": "黑8飞出台面", "severity": "loss"})
+                    return results
+            results.append({"type": "ball_off_table", "desc": "球飞出台面", "severity": "foul"})
+
+        # 轮次错误
+        if wrong_player:
+            results.append({"type": "wrong_player", "desc": "轮次错误", "severity": "foul"})
+
+        # 黑8提前进袋（致命犯规）
         for b in potted:
             if b.get("is_black") and self._remaining_of_group(s.current_player) > 0:
                 results.append({"type": "early_eight", "desc": "黑8提前进袋", "severity": "loss"})
                 break
+
+        # 开放球局打8号
+        if s.table_open:
+            for b in potted:
+                if b.get("is_black"):
+                    results.append({"type": "open_8ball", "desc": "开放球局先碰8号", "severity": "foul"})
+                    break
+
+        # 打进对方球
         own_group = s.player1_balls if s.current_player == 1 else s.player2_balls
         if own_group:
             for b in potted:
@@ -187,6 +274,14 @@ class MatchMode:
                 if is_opp:
                     results.append({"type": "opponent_ball", "desc": "打进对方球", "severity": "foul"})
                     break
+
+        # 打黑8时白球进袋 → 不是致命犯规（黑8本身没进）
+        if cue_pocketed:
+            remaining = self._remaining_of_group(s.current_player)
+            if remaining == 0:
+                # 正在打黑8时犯规 → black8阶段但非致命
+                results.append({"type": "black8_foul", "desc": "击打黑8犯规", "severity": "foul"})
+
         return results
 
     def apply_fouls(self, fouls: list) -> dict:
