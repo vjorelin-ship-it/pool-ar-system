@@ -575,3 +575,44 @@ async def save_annotate_labels(name: str, req: Request):
     with open(path, 'w') as f:
         f.write(text if text else ' ')
     return PlainTextResponse("OK")
+
+
+# ═══════════════════════════════════════════════════════════════
+#  Admin data endpoints — read persisted history files
+# ═══════════════════════════════════════════════════════════════
+
+@router.get("/api/admin/match-history")
+def get_match_history():
+    """Return match history from persisted file."""
+    import json, os
+    p = os.path.join(os.path.dirname(__file__), "..", "learning", "match_history.json")
+    try:
+        with open(p, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {"history": [], "player1_name": "", "player2_name": ""}
+
+
+@router.get("/api/admin/training-stats")
+def get_training_stats():
+    """Return training stats from persisted file."""
+    import json, os
+    p = os.path.join(os.path.dirname(__file__), "..", "learning", "training_history.json")
+    try:
+        with open(p, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {"current_level": 1, "current_drill": 0, "total_attempts": 0, "total_successes": 0}
+
+
+@router.get("/api/admin/shot-data")
+def get_shot_data(limit: int = 50):
+    """Return recent shot records."""
+    import json, os
+    p = os.path.join(os.path.dirname(__file__), "..", "learning", "shot_data.json")
+    try:
+        with open(p, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return data[-limit:] if isinstance(data, list) else []
+    except Exception:
+        return []

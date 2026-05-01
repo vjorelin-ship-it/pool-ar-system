@@ -284,6 +284,30 @@
     <div class="stat-row"><span class="stat-label">摄像头来源</span><span class="stat-value" id="cameraSource">RTSP</span></div>
   </div>
 
+  <!-- Match History -->
+  <div class="card">
+    <div class="card-title">■ 比赛历史 <button class="btn" style="margin-left:8px;padding:2px 8px;font-size:10px" onclick="loadMatchHistory()">刷新</button></div>
+    <div id="matchHistoryContent" style="font-size:12px;max-height:200px;overflow-y:auto">
+      <span style="color:var(--text-dim)">点击刷新加载...</span>
+    </div>
+  </div>
+
+  <!-- Training Stats -->
+  <div class="card">
+    <div class="card-title">■ 训练统计 <button class="btn" style="margin-left:8px;padding:2px 8px;font-size:10px" onclick="loadTrainingStats()">刷新</button></div>
+    <div id="trainingStatsContent" style="font-size:12px;max-height:200px;overflow-y:auto">
+      <span style="color:var(--text-dim)">点击刷新加载...</span>
+    </div>
+  </div>
+
+  <!-- Shot Data -->
+  <div class="card">
+    <div class="card-title">■ 击球记录 <button class="btn" style="margin-left:8px;padding:2px 8px;font-size:10px" onclick="loadShotData()">刷新</button></div>
+    <div id="shotDataContent" style="font-size:12px;max-height:200px;overflow-y:auto">
+      <span style="color:var(--text-dim)">点击刷新加载...</span>
+    </div>
+  </div>
+
   <!-- Log -->
   <div class="card full-width">
     <div class="card-title">■ 系统日志 <button class="btn" style="margin-left:8px;padding:2px 8px;font-size:10px" onclick="clearLog()">清空</button></div>
@@ -587,6 +611,95 @@ function clearLog() {
 }
 
 // ─── Init ───────────────────────────────────────────────────
+// ─── Admin Data Loaders ─────────────────────────────────────
+function loadMatchHistory() {
+  fetch('/api/admin/match-history').then(r => r.json()).then(d => {
+    const el = document.getElementById('matchHistoryContent');
+    if (!d.player1_name && !d.player2_name) {
+      el.innerHTML = '<span style="color:var(--text-dim)">暂无比赛记录</span>';
+      return;
+    }
+    let html = `<div class="stat-row"><span class="stat-label">选手</span><span>${d.player1_name} vs ${d.player2_name}</span></div>`;
+    html += `<div class="stat-row"><span class="stat-label">比分</span><span>${d.player1_score} : ${d.player2_score}</span></div>`;
+    if (d.game_over) {
+      html += `<div class="stat-row"><span class="stat-label">结果</span><span class="stat-value green">选手${d.winner} 获胜</span></div>`;
+    }
+    if (d.player1_balls) {
+      html += `<div class="stat-row"><span class="stat-label">球色</span><span>${d.player1_balls} / ${d.player2_balls}</span></div>`;
+    }
+    if (d.last_updated) {
+      html += `<div style="color:var(--text-dim);font-size:10px;margin-top:4px">更新: ${d.last_updated}</div>`;
+    }
+    // History entries
+    if (d.history && d.history.length > 0) {
+      html += '<div style="margin-top:8px;border-top:1px solid var(--border);padding-top:4px">';
+      const recent = d.history.slice(-5);
+      recent.forEach(h => {
+        const act = h.foul ? '犯规' : (h.potted && h.potted.length > 0 ? '进球' : '未进');
+        const color = h.foul ? 'var(--danger)' : (act === '进球' ? 'var(--accent)' : 'var(--text-dim)');
+        html += `<div style="font-size:10px;color:${color}">• ${act} (选手${h.player || '?'})</div>`;
+      });
+      html += '</div>';
+    }
+    el.innerHTML = html;
+  }).catch(() => {
+    document.getElementById('matchHistoryContent').innerHTML = '<span style="color:var(--danger)">加载失败</span>';
+  });
+}
+
+function loadTrainingStats() {
+  fetch('/api/admin/training-stats').then(r => r.json()).then(d => {
+    const el = document.getElementById('trainingStatsContent');
+    const rate = d.total_attempts > 0 ? (d.total_successes / d.total_attempts * 100).toFixed(1) : 0;
+    let html = `<div class="stat-row"><span class="stat-label">当前关卡</span><span>第${d.current_level}档</span></div>`;
+    html += `<div class="stat-row"><span class="stat-label">当前题号</span><span>第${(d.current_drill||0)+1}题</span></div>`;
+    html += `<div class="stat-row"><span class="stat-label">总尝试</span><span>${d.total_attempts} 杆</span></div>`;
+    html += `<div class="stat-row"><span class="stat-label">总成功</span><span>${d.total_successes} 杆</span></div>`;
+    html += `<div class="stat-row"><span class="stat-label">成功率</span><span class="stat-value green">${rate}%</span></div>`;
+    if (d.consecutive_successes > 0) {
+      html += `<div class="stat-row"><span class="stat-label">连续成功</span><span class="stat-value yellow">${d.consecutive_successes} 次</span></div>`;
+    }
+    if (d.completed_levels && d.completed_levels.length > 0) {
+      html += `<div class="stat-row"><span class="stat-label">已通关</span><span>${d.completed_levels.join(', ')}档</span></div>`;
+    }
+    // Speed history
+    if (d.speed_history && d.speed_history.length > 0) {
+      const speeds = d.speed_history.slice(-10).map(s => s[0]);
+      const avg = (speeds.reduce((a,b) => a+b, 0) / speeds.length).toFixed(1);
+      html += `<div style="margin-top:8px;border-top:1px solid var(--border);padding-top:4px">`;
+      html += `<div class="stat-row"><span class="stat-label">近10杆均速</span><span class="stat-value green">${avg} m/s</span></div>`;
+      html += `</div>`;
+    }
+    el.innerHTML = html;
+  }).catch(() => {
+    document.getElementById('trainingStatsContent').innerHTML = '<span style="color:var(--danger)">加载失败</span>';
+  });
+}
+
+function loadShotData() {
+  fetch('/api/admin/shot-data?limit=10').then(r => r.json()).then(data => {
+    const el = document.getElementById('shotDataContent');
+    if (!data || data.length === 0) {
+      el.innerHTML = '<span style="color:var(--text-dim)">暂无击球记录</span>';
+      return;
+    }
+    let html = '';
+    data.reverse().forEach(s => {
+      const sid = s.shot_id || '?';
+      const mode = s.mode || '?';
+      const speed = s.cue_speed ? s.cue_speed.toFixed(1) + ' m/s' : '—';
+      html += `<div style="font-size:10px;padding:2px 0;border-bottom:1px solid var(--border)">
+        <span style="color:var(--accent)">#${sid}</span>
+        <span style="color:var(--text-dim)">${mode}</span>
+        <span>杆速 ${speed}</span>
+      </div>`;
+    });
+    el.innerHTML = html;
+  }).catch(() => {
+    document.getElementById('shotDataContent').innerHTML = '<span style="color:var(--danger)">加载失败</span>';
+  });
+}
+
 function init() {
   // Clock
   setInterval(() => {
@@ -600,6 +713,9 @@ function init() {
   setInterval(refreshStatus, 5000);
   refreshStatus();
   loadDirs();
+  loadMatchHistory();
+  loadTrainingStats();
+  loadShotData();
 
   // Check annotation count
   fetch('/api/annotate/images').then(r => r.json()).then(images => {
