@@ -593,38 +593,12 @@ def train_trajectory_model(samples: int = 50000, epochs: int = 200):
         import os
         model_dir = os.path.join(os.path.dirname(__file__), "..", "learning")
         # Generate synthetic data
-        from learning.synthetic_data import SyntheticDataGenerator, to_tensors
+        from learning.synthetic_data import SyntheticDataGenerator
         gen = SyntheticDataGenerator()
         data_samples = gen.generate(samples)
-        data = to_tensors(data_samples)
 
-        # Pretrain
-        import torch
-        n = len(data["trajectory"])
-        indices = list(range(n))
-        import random
-        bs = 16
-        for epoch in range(epochs):
-            random.shuffle(indices)
-            losses = []
-            for i in range(0, n, bs):
-                batch_idx = indices[i:i + bs]
-                batch = {
-                    "trajectory": data["trajectory"][batch_idx],
-                    "initial_balls": data["initial_balls"][batch_idx],
-                    "events": data["events"][batch_idx],
-                    "shot_params": data["shot_params"][batch_idx],
-                    "physics_path": data["physics_path"][batch_idx],
-                }
-                table_img = torch.zeros(len(batch_idx), 3, 600, 1200)
-                loss_info = model._trainer.train_step(batch, table_img)
-                losses.append(loss_info["total"])
-            if (epoch + 1) % 50 == 0:
-                avg = sum(losses) / len(losses)
-                print(f"[Trajectory] Epoch {epoch+1}/{epochs}, loss={avg:.6f}")
-
-        model._is_trained = True
-        model._train_count += 1
+        # pretrain() handles batching internally
+        model.pretrain(data_samples, epochs=epochs, batch_size=16)
         output_path = os.path.join(model_dir, "diffusion_model.pt")
         model.save(output_path)
         # Enable AI trajectory in main system
