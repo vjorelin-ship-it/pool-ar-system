@@ -47,12 +47,12 @@ public class SettingsFragment extends Fragment {
         calStatus = v.findViewById(R.id.calStatus);
         v.findViewById(R.id.btnCalStart).setOnClickListener(v2 ->
             ApiClient.startCalibration(new ApiClient.ApiCallback<Void>() {
-                @Override public void onResult(Void r) { calStatus.setText("状态: 校准中..."); }
-                @Override public void onError(String e) { calStatus.setText("状态: 启动失败"); }
+                @Override public void onResult(Void r) { calStatus.setText(R.string.cal_status_calibrating); }
+                @Override public void onError(String e) { calStatus.setText(R.string.cal_status_start_failed); }
             }));
         v.findViewById(R.id.btnCalStop).setOnClickListener(v2 ->
             ApiClient.stopCalibration(new ApiClient.ApiCallback<Void>() {
-                @Override public void onResult(Void r) { calStatus.setText("状态: 已停止"); }
+                @Override public void onResult(Void r) { calStatus.setText(R.string.cal_status_stopped); }
                 @Override public void onError(String e) {}
             }));
 
@@ -60,15 +60,15 @@ public class SettingsFragment extends Fragment {
         modelStatus = v.findViewById(R.id.modelStatus);
         v.findViewById(R.id.btnModelTrain).setOnClickListener(v2 ->
             ApiClient.post("/api/ai-train/start", null, ok ->
-                Toast.makeText(getContext(), ok ? "AI训练已开始" : "训练启动失败", Toast.LENGTH_SHORT).show()));
+                Toast.makeText(getContext(), ok ? R.string.msg_ai_train_started : R.string.msg_ai_train_failed, Toast.LENGTH_SHORT).show()));
         v.findViewById(R.id.btnModelReset).setOnClickListener(v2 ->
             new android.app.AlertDialog.Builder(getContext())
-                .setTitle("重置模型")
-                .setMessage("确定要重置AI模型吗？所有学习数据将丢失。")
-                .setPositiveButton("确定", (d, w) ->
+                .setTitle(R.string.msg_reset_model_title)
+                .setMessage(R.string.msg_reset_model_desc)
+                .setPositiveButton(R.string.btn_confirm, (d, w) ->
                     ApiClient.post("/api/ai-train/reset", null, ok ->
-                        Toast.makeText(getContext(), ok ? "模型已重置" : "重置失败", Toast.LENGTH_SHORT).show()))
-                .setNegativeButton("取消", null)
+                        Toast.makeText(getContext(), ok ? R.string.msg_model_reset : R.string.msg_model_reset_failed, Toast.LENGTH_SHORT).show()))
+                .setNegativeButton(R.string.btn_cancel, null)
                 .show());
 
         // 默认选手姓名
@@ -80,7 +80,7 @@ public class SettingsFragment extends Fragment {
             prefs.edit().putString("default_player1", defaultPlayer1.getText().toString().trim())
                 .putString("default_player2", defaultPlayer2.getText().toString().trim())
                 .apply();
-            Toast.makeText(getContext(), "已保存", Toast.LENGTH_SHORT).show();
+            Toast.makeText(getContext(), R.string.msg_saved, Toast.LENGTH_SHORT).show();
         });
 
         return v;

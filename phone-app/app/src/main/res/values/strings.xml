@@ -44,4 +44,57 @@
     <string name="btn_start_match">开始比赛</string>
 
     <string name="dialog_level_title">选择训练关卡</string>
+
+    <!-- 状态消息 -->
+    <string name="msg_system_started">系统已启动</string>
+    <string name="msg_system_stopped">系统已停止</string>
+    <string name="msg_start_failed">启动失败</string>
+    <string name="msg_stop_failed">停止失败</string>
+    <string name="msg_match_started">比赛开始: %1$s vs %2$s</string>
+    <string name="msg_level_selected">已选择: %1$s</string>
+    <string name="msg_saved">已保存</string>
+    <string name="msg_saved_reconnect">已保存并重连 %1$s:%2$d</string>
+    <string name="msg_port_error">端口格式错误</string>
+    <string name="msg_switch_turn_confirm">确定要手动交换击球权吗？</string>
+    <string name="msg_switch_turn_title">确认交换击球</string>
+    <string name="msg_switch_turn_ok">已交换</string>
+    <string name="msg_switch_fail">失败</string>
+    <string name="msg_ai_train_started">AI训练已开始</string>
+    <string name="msg_ai_train_failed">训练启动失败</string>
+    <string name="msg_model_reset">模型已重置</string>
+    <string name="msg_model_reset_failed">重置失败</string>
+    <string name="msg_reset_model_title">重置模型</string>
+    <string name="msg_reset_model_desc">确定要重置AI模型吗？所有学习数据将丢失。</string>
+
+    <!-- 按钮 -->
+    <string name="btn_confirm">确定</string>
+    <string name="btn_cancel">取消</string>
+    <string name="btn_back_to_levels">← 返回选关</string>
+
+    <!-- 系统信息标签 -->
+    <string name="info_server_fmt">服务器: %1$s:%2$d</string>
+    <string name="info_camera_normal">摄像头: 正常</string>
+    <string name="info_camera_offline">摄像头: 离线</string>
+    <string name="info_mode_fmt">模式: %1$s</string>
+
+    <!-- 训练 -->
+    <string name="waiting_for_shot">⏳ 等待击球…</string>
+    <string name="placement_correct">✅ 摆球正确</string>
+    <string name="placement_wrong">❌ 摆球位置有偏差，请调整</string>
+    <string name="shot_success">✅ 目标球进袋！</string>
+    <string name="shot_fail">❌ 未成功</string>
+    <string name="balls_remaining_fmt">纯色剩%1$d颗  花色剩%2$d颗  黑8%3$s</string>
+    <string name="black8_on_table">在台</string>
+    <string name="black8_pocketed">已进</string>
+
+    <!-- 校准 -->
+    <string name="cal_status_calibrating">状态: 校准中…</string>
+    <string name="cal_status_stopped">状态: 已停止</string>
+    <string name="cal_status_start_failed">状态: 启动失败</string>
+    <string name="cal_status_unknown">状态: 未知</string>
+
+    <!-- AI模型状态 -->
+    <string name="model_status_fmt">已采集: %1$d 杆 | 模型: %2$s</string>
+    <string name="model_trained">✅ 已训练</string>
+    <string name="model_untrained">未训练</string>
 </resources>
