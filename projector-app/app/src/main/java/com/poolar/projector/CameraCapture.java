@@ -151,7 +151,7 @@ public class CameraCapture {
     private void startRepeatingCapture() {
         try {
             CaptureRequest.Builder builder = cameraDevice.createCaptureRequest(
-                CameraDevice.TEMPLATE_STILL_CAPTURE);
+                CameraDevice.TEMPLATE_PREVIEW);
             builder.addTarget(imageReader.getSurface());
             builder.set(CaptureRequest.JPEG_QUALITY, (byte) 70);
             captureSession.setRepeatingRequest(builder.build(), null, backgroundHandler);

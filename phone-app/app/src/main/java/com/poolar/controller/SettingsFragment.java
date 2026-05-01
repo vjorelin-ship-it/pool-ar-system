@@ -88,7 +88,13 @@ public class SettingsFragment extends Fragment {
 
     private void saveAndReconnect(SharedPreferences prefs) {
         String host = hostInput.getText().toString().trim();
-        int port = Integer.parseInt(portInput.getText().toString().trim());
+        int port;
+        try {
+            port = Integer.parseInt(portInput.getText().toString().trim());
+        } catch (NumberFormatException e) {
+            Toast.makeText(getContext(), "端口格式错误", Toast.LENGTH_SHORT).show();
+            return;
+        }
         prefs.edit().putString("server_host", host).putInt("server_port", port).apply();
         ApiClient.init(host);
         MainActivity ma = (MainActivity) requireActivity();

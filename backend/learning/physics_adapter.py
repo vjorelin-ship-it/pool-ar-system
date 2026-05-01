@@ -119,6 +119,12 @@ class PhysicsAdapter:
     def get_adjusted_params(self) -> PhysicsParams:
         return self.params
 
+    def reset_to_defaults(self) -> None:
+        """Reset all physics parameters to default values."""
+        self.params = PhysicsParams()
+        self._total_observations = 0
+        print("[PhysicsAdapter] Reset to defaults")
+
     def save(self, path: str = "") -> None:
         path = path or self._save_path
         data = self.params.to_dict()
