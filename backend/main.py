@@ -538,6 +538,78 @@ class PoolARSystem:
         )
         return self.renderer.render_to_base64(overlay)
 
+    def _predict_ai_trajectory(self, warped, balls, cue_ball, target_ball, physics_result):
+        """Use diffusion model to generate smooth trajectory frames."""
+        import numpy as np
+
+        # Prepare inputs
+        h, w = warped.shape[:2]
+        table_img = warped  # BGR, HWC
+
+        # Initial ball states: (16, 8) — [x, y, vx, vy, is_cue, is_black, is_solid, is_stripe]
+        ball_states = np.zeros((16, 8), dtype=np.float32)
+        for i, b in enumerate(balls[:16]):
+            ball_states[i, 0] = b.x
+            ball_states[i, 1] = b.y
+            ball_states[i, 2] = 0  # vx (unknown for static balls)
+            ball_states[i, 3] = 0  # vy
+            ball_states[i, 4] = 1 if b.is_cue else 0
+            ball_states[i, 5] = 1 if b.is_black else 0
+            ball_states[i, 6] = 1 if b.is_solid else 0
+            ball_states[i, 7] = 1 if b.is_stripe else 0
+
+        # Shot params
+        shot_params = np.array([
+            physics_result.cue_speed * 10,  # power
+            physics_result.spin_x if hasattr(physics_result, 'spin_x') else 0,
+            physics_result.spin_y if hasattr(physics_result, 'spin_y') else 0,
+        ], dtype=np.float32)
+
+        # Physics path: (2, 8, 2)
+        physics_path = np.zeros((2, 8, 2), dtype=np.float32)
+        cue_path = physics_result.cue_path
+        target_path = physics_result.target_path
+        for j, pt in enumerate(cue_path[:8]):
+            physics_path[0, j, 0] = pt.x
+            physics_path[0, j, 1] = pt.y
+        for j, pt in enumerate(target_path[:8]):
+            physics_path[1, j, 0] = pt.x
+            physics_path[1, j, 1] = pt.y
+
+        # Predict
+        trajectories = self.trajectory_model.predict(
+            table_img, ball_states, shot_params, physics_path)
+
+        # Convert back to Vec2 paths
+        # trajectories shape: (16, 300, 2)
+        import numpy as np
+        from physics.engine import Vec2
+        ai_cue_path = []
+        ai_target_path = []
+        cue_idx = None
+        target_idx = None
+        for i, b in enumerate(balls[:16]):
+            if b.is_cue:
+                cue_idx = i
+            elif b.x == target_ball.x and b.y == target_ball.y:
+                target_idx = i
+        if target_idx is None and len(balls) > 0:
+            target_idx = 0  # fallback
+
+        if cue_idx is not None:
+            # Sample from dense 300 frames to key waypoints
+            for f in [0, 30, 60, 120, 200, 299]:
+                ai_cue_path.append(Vec2(
+                    float(trajectories[cue_idx, f, 0]),
+                    float(trajectories[cue_idx, f, 1])))
+        if target_idx is not None:
+            for f in [0, 30, 60, 120, 200, 299]:
+                ai_target_path.append(Vec2(
+                    float(trajectories[target_idx, f, 0]),
+                    float(trajectories[target_idx, f, 1])))
+
+        return (ai_cue_path, ai_target_path)
+
     def _compute_and_render_shot(self, warped, balls):
         """计算推荐路线并渲染投影画面"""
         if not balls:
@@ -582,6 +654,17 @@ class PoolARSystem:
                 cue_vec, t_vec,
                 [Vec2(b.x, b.y) for b in balls if b is not cue_ball and b is not t])
             if result.success:
+                # AI trajectory refinement: use diffusion model to generate smooth frames
+                if self._use_ai_trajectory and warped is not None:
+                    try:
+                        ai_paths = self._predict_ai_trajectory(
+                            warped, balls, cue_ball, t, result)
+                        if ai_paths is not None:
+                            result.cue_path = ai_paths[0]
+                            result.target_path = ai_paths[1]
+                    except Exception as e:
+                        print(f"[AI Trajectory] Prediction failed: {e}")
+
                 cue_final = None
                 if result.cue_final_pos:
                     cue_final = (result.cue_final_pos.x, result.cue_final_pos.y)
@@ -912,6 +995,9 @@ class PoolARSystem:
                         # Store warped frame for player identification
                         if warped is not None:
                             system_state["last_warped_frame"] = warped
+
+                        # Feed trajectory collector for real-shot data collection
+                        self.trajectory_collector.feed_frame(warped, balls)
 
                         # Pocket detection
                         self._handle_pocket_events(balls)
