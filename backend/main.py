@@ -25,6 +25,7 @@ from physics.engine import PhysicsEngine, Vec2
 from game.match_mode import MatchMode
 from game.training_mode import TrainingMode
 from game.announcer import Announcer
+from game.shot_timer import ShotTimer
 from renderer.projector_renderer import ProjectorRenderer, ProjectionOverlay
 from vision.table_detector import TableDetector
 from vision.ball_detector import BallDetector
@@ -54,6 +55,7 @@ class PoolARSystem:
         self.speed_detector = SpeedDetector()
         self.player_identifier = PlayerIdentifier()
         self.announcer = Announcer()
+        self.shot_timer = ShotTimer(shot_seconds=45, extension_seconds=30)
         self.data_collector = DataCollector()
         self.physics_adapter = PhysicsAdapter()
         self.trajectory_model = DiffusionTrajectoryModel()
@@ -438,6 +440,10 @@ class PoolARSystem:
                         asyncio.run_coroutine_threadsafe(
                             manager.broadcast_announce(final_text), self._loop,
                         )
+                    self.shot_timer.stop()
+                else:
+                    # 开始下一杆计时
+                    self.shot_timer.start_shot()
 
     def _build_foul_announce(self, foul_types: list, state, opponent: int,
                               intentional_count: int = 0) -> str:
@@ -903,7 +909,46 @@ class PoolARSystem:
                         cue_speed = self.speed_detector.update_with_balls(balls)
                         if cue_speed is not None and cue_speed > 0:
                             system_state["table_state"]["last_cue_speed"] = cue_speed
+                            # 检测到击球 → 停止计时
+                            self.shot_timer.stop()
                             print(f"[Speed] Cue speed: {cue_speed} m/s")
+
+                        # 限时执裁：比赛模式下检查计时器
+                        if current_mode == "match" and not self.match_mode.state.game_over:
+                            # 如果计时器未启动，启动它
+                            if not self.shot_timer.running and not self.shot_timer.timed_out:
+                                self.shot_timer.start_shot()
+                            timer_event = self.shot_timer.tick()
+                            if timer_event and self._loop:
+                                if timer_event == "timeout":
+                                    # 超时犯规
+                                    opp = (2 if self.match_mode.state.current_player == 1
+                                           else 1)
+                                    foul_text = self.announcer.time_foul(opp)
+                                    asyncio.run_coroutine_threadsafe(
+                                        manager.broadcast_announce(foul_text), self._loop)
+                                    # 处理超时犯规
+                                    result = self.match_mode.process_shot(
+                                        [], is_foul=True)
+                                    self.match_mode.save_history()
+                                    print(f"[Timer] Timeout foul: {foul_text}")
+                                elif timer_event in ("10s", "5", "4", "3", "2", "1"):
+                                    text = None
+                                    if timer_event == "10s":
+                                        text = self.announcer.time_countdown_10()
+                                    elif timer_event == "5":
+                                        text = self.announcer.time_countdown_5()
+                                    elif timer_event == "4":
+                                        text = self.announcer.time_countdown_4()
+                                    elif timer_event == "3":
+                                        text = self.announcer.time_countdown_3()
+                                    elif timer_event == "2":
+                                        text = self.announcer.time_countdown_2()
+                                    elif timer_event == "1":
+                                        text = self.announcer.time_countdown_1()
+                                    if text:
+                                        asyncio.run_coroutine_threadsafe(
+                                            manager.broadcast_announce(text), self._loop)
 
                         # Update system state
                         system_state["table_state"]["detected"] = True
