@@ -116,10 +116,10 @@ def test_match_mode():
     print(f"  [OK] 犯规换手: {result}")
     assert mm.state.current_player == 1, "犯规后应切回选手一"
 
-    print(f"  [OK] 播报测试: {ann.match_start()}")
-    print(f"  [OK] 播报测试: {ann.pocket_announce('red', False, False, False)}")
-    print(f"  [OK] 播报测试: {ann.foul('白球进袋')}")
-    print(f"  [OK] 播报测试: {ann.victory(1)}")
+    print(f"  [OK] 播报测试: {ann.match_start(1)}")
+    print(f"  [OK] 播报测试: {ann.ball_pocketed('red', False)}")
+    print(f"  [OK] 播报测试: {ann.foul_cue_pocketed(2)}")
+    print(f"  [OK] 播报测试: {ann.game_win(1)}")
 
 
 def test_pocket_detector():
@@ -254,14 +254,14 @@ def test_announcer():
     a = Announcer("张三", "李四")
 
     tests = [
-        (a.pocket_announce("red", False, False, False), "3号球进袋"),
-        (a.pocket_announce("yellow", True, False, False), "9号球进袋"),
-        (a.pocket_announce("black", False, False, True), "黑8进袋"),
-        (a.pocket_announce("white", False, True, False), "犯规！白球进袋"),
-        (a.match_start(), "比赛开始，张三开球"),
-        (a.assign_balls("纯色"), "张三纯色球，李四花色球"),
-        (a.foul("白球进袋"), "犯规！白球进袋"),
-        (a.victory(1), "本局张三获胜！"),
+        (a.ball_pocketed("red", False), "3号球进袋"),
+        (a.ball_pocketed("yellow", True), "9号球进袋"),
+        ("黑8进袋", "黑8进袋"),
+        (a.foul_cue_pocketed(2), "犯规！白球进袋，李四自由球"),
+        (a.match_start(1), "比赛开始，张三开球"),
+        (a.ball_group_assigned(1, "纯色球"), "张三纯色球，李四花色球"),
+        (a.foul_cue_pocketed(2), "犯规！白球进袋，李四自由球"),
+        (a.game_win(1), "黑8进袋！本局张三获胜！"),
     ]
     for actual, expected in tests:
         # Verify non-empty string with reasonable length

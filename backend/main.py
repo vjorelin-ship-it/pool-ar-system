@@ -244,8 +244,13 @@ class PoolARSystem:
                 )
 
             # 2. Announcer: generate speech text → broadcast to projector (TTS)
-            text = self.announcer.pocket_announce(
-                ev.color, ev.is_stripe, ev.is_cue, ev.is_black)
+            if ev.is_cue:
+                opp = 2 if self.match_mode.state.current_player == 1 else 1
+                text = self.announcer.foul_cue_pocketed(opp)
+            elif ev.is_black:
+                text = "黑8进袋"
+            else:
+                text = self.announcer.ball_pocketed(ev.color, ev.is_stripe)
             if self._loop:
                 asyncio.run_coroutine_threadsafe(
                     manager.broadcast_announce(text), self._loop,
