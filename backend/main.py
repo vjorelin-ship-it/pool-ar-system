@@ -32,6 +32,7 @@ from vision.ball_detector import BallDetector
 from vision.pocket_detector import PocketDetector
 from vision.speed_detector import SpeedDetector
 from vision.player_identifier import PlayerIdentifier
+from vision.cushion_detector import CushionDetector
 from learning.data_collector import DataCollector
 from learning.physics_adapter import PhysicsAdapter
 from learning.diffusion_model import DiffusionTrajectoryModel
@@ -53,6 +54,7 @@ class PoolARSystem:
         self.renderer = ProjectorRenderer()
         self.pocket_detector = PocketDetector()
         self.speed_detector = SpeedDetector()
+        self.cushion_detector = CushionDetector()
         self.player_identifier = PlayerIdentifier()
         self.announcer = Announcer()
         self.shot_timer = ShotTimer(shot_seconds=45, extension_seconds=30)
@@ -363,10 +365,19 @@ class PoolARSystem:
             if identified_player and identified_player != s.current_player:
                 wrong_player = True
 
+            # 碰库检测结果
+            no_cushion = not self.cushion_detector.has_any_cushion_hit() and not match_potted
+            break_count = self.cushion_detector.get_break_cushion_count()
+            is_weak_break = s.is_break_shot and break_count < 4 and not match_potted
+
+            self.cushion_detector.end_shot()
+
             result = self.match_mode.process_shot(
                 match_potted, is_foul=match_foul,
                 cue_pocketed=cue_pocketed,
                 wrong_player=wrong_player,
+                no_cushion=no_cushion,
+                is_weak_break=is_weak_break,
             )
             self.match_mode.save_history()
 
@@ -909,9 +920,14 @@ class PoolARSystem:
                         cue_speed = self.speed_detector.update_with_balls(balls)
                         if cue_speed is not None and cue_speed > 0:
                             system_state["table_state"]["last_cue_speed"] = cue_speed
-                            # 检测到击球 → 停止计时
+                            # 检测到击球 → 停止计时 + 开始碰库追踪
                             self.shot_timer.stop()
+                            self.cushion_detector.new_shot()
                             print(f"[Speed] Cue speed: {cue_speed} m/s")
+
+                        # 碰库检测
+                        if balls:
+                            cushion_result = self.cushion_detector.update(balls)
 
                         # 限时执裁：比赛模式下检查计时器
                         if current_mode == "match" and not self.match_mode.state.game_over:

@@ -78,7 +78,8 @@ class MatchMode:
     def process_shot(self, potted_balls: List[Dict[str, Any]],
                      is_foul: bool = False, cue_pocketed: bool = False,
                      no_ball_hit: bool = False, no_cushion: bool = False,
-                     ball_off_table: bool = False, wrong_player: bool = False) -> dict:
+                     ball_off_table: bool = False, wrong_player: bool = False,
+                     is_weak_break: bool = False) -> dict:
         """Process a shot with full foul detection (CTBA 2025 rules).
 
         Args:
@@ -99,7 +100,8 @@ class MatchMode:
         # Detect all fouls
         fouls = self.detect_fouls(potted_balls, cue_pocketed=cue_pocketed,
                                    no_ball_hit=no_ball_hit, no_cushion=no_cushion,
-                                   ball_off_table=ball_off_table, wrong_player=wrong_player)
+                                   ball_off_table=ball_off_table, wrong_player=wrong_player,
+                                   is_weak_break=is_weak_break)
 
         s.record_shot(potted_balls, is_foul or len(fouls) > 0)
 
