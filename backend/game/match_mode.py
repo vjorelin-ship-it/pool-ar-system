@@ -27,6 +27,28 @@ class MatchState:
     # 僵局计数
     consecutive_misses: int = 0  # 连续无进球杆数
     target_wins: int = 5  # 目标胜局数（先达到此局数者获胜）
+    # 阶段追踪（AI裁判8阶段模型）
+    phase: str = "init"  # init|lag|break|open|playing|black8|game_over|match_over
+    # 8号球规则
+    designated_pocket: str = ""  # 指定袋口 (tl|tm|tr|bl|bm|br|"")，空=不指定
+    require_designate: bool = False  # 是否需要指定袋口
+    # 犯规累计（故意犯规F17/F20）
+    intentional_fouls_p1: int = 0  # 选手一故意犯规次数（本场累计）
+    intentional_fouls_p2: int = 0  # 选手二故意犯规次数
+    # 消极比赛
+    passive_warnings_p1: int = 0
+    passive_warnings_p2: int = 0
+    # 限时
+    shot_timer_seconds: int = 45
+    extension_used_p1: bool = False
+    extension_used_p2: bool = False
+    # 开球
+    break_8ball_potted: bool = False  # 开球8号入袋
+    break_two_colors: bool = False  # 开球两色同时入袋
+    break_cushion_count: int = 0  # 开球碰库球数
+    # 目标胜局
+    player1_match_wins: int = 0
+    player2_match_wins: int = 0
 
     def switch_player(self) -> None:
         self.current_player = 2 if self.current_player == 1 else 1
@@ -156,6 +178,29 @@ class MatchMode:
         """Assign ball groups based on first pocketed ball after break."""
         s = self.state
         s.table_open = False
+
+        # 检查是否有8号球入袋
+        has_8ball = any(b.get("is_black") for b in potted)
+        s.break_8ball_potted = has_8ball
+
+        # 检查是否两色同时入袋
+        has_solid = any(b.get("is_solid") for b in potted)
+        has_stripe = any(b.get("is_stripe") for b in potted)
+        s.break_two_colors = has_solid and has_stripe
+
+        # 两色同时入袋 → 选手选择
+        if s.break_two_colors:
+            s.phase = "open"
+            return {"action": "choose_group", "player": s.current_player,
+                    "potted_solid": has_solid, "potted_stripe": has_stripe}
+
+        # 8号球入袋（无其他犯规）→ 特殊处理
+        if has_8ball:
+            s.phase = "open"
+            s.break_8ball_potted = True
+            return {"action": "break_8ball_choice", "player": s.current_player}
+
+        # 正常定组
         first = potted[0]
         if first.get("is_solid"):
             s.player1_balls = "solids"
@@ -167,8 +212,33 @@ class MatchMode:
             return {"action": "open_table", "player": s.current_player}
         s.p1_remaining = 7
         s.p2_remaining = 7
+        s.phase = "playing"
         return {"action": "assign", "p1": s.player1_balls,
                 "p2": s.player2_balls, "player": s.current_player}
+
+    def choose_group(self, player: int, group: str) -> dict:
+        """选手选择球组（开球两色同时入袋后）"""
+        s = self.state
+        if group == "solids":
+            s.player1_balls = "solids" if player == 1 else "stripes"
+            s.player2_balls = "stripes" if player == 1 else "solids"
+        else:
+            s.player1_balls = "stripes" if player == 1 else "solids"
+            s.player2_balls = "solids" if player == 1 else "stripes"
+        s.p1_remaining = 7
+        s.p2_remaining = 7
+        s.phase = "playing"
+        return {"action": "assign", "p1": s.player1_balls,
+                "p2": s.player2_balls, "player": s.current_player}
+
+    def handle_break_8ball_choice(self, player: int, choice: str) -> dict:
+        """处理开球8号入袋后的选择"""
+        s = self.state
+        if choice == "continue":
+            s.break_8ball_potted = False  # 已处理
+            return {"action": "continue", "player": player}
+        else:
+            return {"action": "rebreak", "player": player}
 
     def _handle_pot(self, potted: List[Dict[str, Any]]) -> dict:
         s = self.state
@@ -223,8 +293,9 @@ class MatchMode:
 
     def detect_fouls(self, potted: list, cue_pocketed: bool = False,
                      no_ball_hit: bool = False, no_cushion: bool = False,
-                     ball_off_table: bool = False, wrong_player: bool = False) -> list:
-        """Detect all fouls per CTBA 2025 rules. Returns list of {type, desc, severity}."""
+                     ball_off_table: bool = False, wrong_player: bool = False,
+                     is_weak_break: bool = False) -> list:
+        """Detect all fouls per CTBA 2025 rules (20 types)."""
         results = []
         s = self.state
 
@@ -236,7 +307,7 @@ class MatchMode:
         if no_ball_hit:
             results.append({"type": "no_hit", "desc": "未命中目标球", "severity": "foul"})
 
-        # 无球碰库（CTBA: 无进球时至少一球碰库）
+        # 无球碰库
         if no_cushion and not potted:
             results.append({"type": "no_cushion", "desc": "击球后无球碰库", "severity": "foul"})
 
@@ -244,7 +315,7 @@ class MatchMode:
         if ball_off_table:
             for b in potted:
                 if b.get("is_black"):
-                    results.append({"type": "black8_off_table", "desc": "黑8飞出台面", "severity": "loss"})
+                    results.append({"type": "black8_off_table", "desc": "8号球飞离台面", "severity": "loss"})
                     return results
             results.append({"type": "ball_off_table", "desc": "球飞出台面", "severity": "foul"})
 
@@ -252,9 +323,17 @@ class MatchMode:
         if wrong_player:
             results.append({"type": "wrong_player", "desc": "轮次错误", "severity": "foul"})
 
-        # 黑8提前进袋（致命犯规）
+        # F14: 最后一颗目标球+8号球同时入袋
+        remaining = self._remaining_of_group(s.current_player)
+        has_target = any(b.get("is_solid") or b.get("is_stripe") for b in potted)
+        has_black = any(b.get("is_black") for b in potted)
+        if remaining == 1 and has_target and has_black:
+            results.append({"type": "last_and_8ball", "desc": "最后一颗目标球与8号球同时入袋", "severity": "loss"})
+            return results
+
+        # F16: 黑8提前进袋（致命犯规）
         for b in potted:
-            if b.get("is_black") and self._remaining_of_group(s.current_player) > 0:
+            if b.get("is_black") and remaining > 0:
                 results.append({"type": "early_eight", "desc": "黑8提前进袋", "severity": "loss"})
                 break
 
@@ -275,23 +354,60 @@ class MatchMode:
                     results.append({"type": "opponent_ball", "desc": "打进对方球", "severity": "foul"})
                     break
 
-        # 打黑8时白球进袋 → 不是致命犯规（黑8本身没进）
-        if cue_pocketed:
-            remaining = self._remaining_of_group(s.current_player)
-            if remaining == 0:
-                # 正在打黑8时犯规 → black8阶段但非致命
-                results.append({"type": "black8_foul", "desc": "击打黑8犯规", "severity": "foul"})
+        # F19: 8号球入错袋（指定袋口规则下）
+        if has_black and remaining == 0 and s.require_designate and s.designated_pocket:
+            # 检查是否进入正确袋口——从外部传入或在此检测
+            pass  # 由main.py在调用前判定
+
+        # 打黑8时白球进袋 → F13
+        if cue_pocketed and remaining == 0:
+            results.append({"type": "black8_cue_pocketed", "desc": "8号球入袋同时白球进袋", "severity": "loss"})
+
+        # F20: 开球小力量
+        if is_weak_break and s.is_break_shot:
+            results.append({"type": "weak_break", "desc": "小力量开球", "severity": "intentional"})
 
         return results
 
     def apply_fouls(self, fouls: list) -> dict:
-        """Apply foul results: switch, free ball, or loss."""
+        """Apply foul results: switch, free ball, intentional cumulative, or loss."""
         s = self.state
+        # 致命犯规→判负
         for f in fouls:
             if f.get("severity") == "loss":
                 s.winner = 2 if s.current_player == 1 else 1
                 s.game_over = True
+                s.phase = "game_over"
                 return {"action": "lose", "player": s.current_player, "reason": f["desc"]}
+
+        # 故意犯规(F17/F20)累计
+        for f in fouls:
+            if f.get("severity") == "intentional":
+                if s.current_player == 1:
+                    s.intentional_fouls_p1 += 1
+                    count = s.intentional_fouls_p1
+                else:
+                    s.intentional_fouls_p2 += 1
+                    count = s.intentional_fouls_p2
+                if count >= 3:
+                    s.winner = 2 if s.current_player == 1 else 1
+                    s.game_over = True
+                    s.phase = "match_over"
+                    return {"action": "lose_match", "player": s.current_player,
+                            "reason": f"第{count}次故意犯规"}
+                elif count >= 2:
+                    s.winner = 2 if s.current_player == 1 else 1
+                    s.game_over = True
+                    s.phase = "game_over"
+                    return {"action": "lose", "player": s.current_player,
+                            "reason": f"第{count}次故意犯规"}
+                else:
+                    # 第一次警告
+                    s.switch_player()
+                    return {"action": "switch_player", "player": s.current_player,
+                            "foul": True, "intentional_count": count,
+                            "reasons": [f["desc"]]}
+
         s.switch_player()
         if any(f.get("type") == "cue_pocketed" for f in fouls):
             s.free_ball = True

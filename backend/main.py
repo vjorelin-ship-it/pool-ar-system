@@ -375,7 +375,8 @@ class PoolARSystem:
 
             if phase == "foul":
                 foul_types = ann.get("foul_types", [])
-                foul_text = self._build_foul_announce(foul_types, s, opp)
+                intentional_count = result.get("intentional_count", 0)
+                foul_text = self._build_foul_announce(foul_types, s, opp, intentional_count)
                 if self._loop and foul_text:
                     asyncio.run_coroutine_threadsafe(
                         manager.broadcast_announce(foul_text), self._loop)
@@ -438,18 +439,29 @@ class PoolARSystem:
                             manager.broadcast_announce(final_text), self._loop,
                         )
 
-    def _build_foul_announce(self, foul_types: list, state, opponent: int) -> str:
-        """根据犯规类型生成完整播报文字"""
+    def _build_foul_announce(self, foul_types: list, state, opponent: int,
+                              intentional_count: int = 0) -> str:
+        """根据犯规类型生成完整播报文字（CTBA 2025 20种犯规）"""
         if not foul_types:
             return ""
-        # 按严重程度排序：致命犯规优先
+        # 致命犯规优先
         for ft in foul_types:
             if ft == "early_eight":
                 return self.announcer.black8_loss_early(state.current_player)
             elif ft == "black8_off_table":
-                return self.announcer.black8_loss_off_table(state.current_player)
-            elif ft == "black8_foul":
-                return self.announcer.black8_foul_but_safe(opponent)
+                return self.announcer.foul_8ball_off_table_loss(state.current_player)
+            elif ft == "black8_cue_pocketed":
+                return self.announcer.black8_loss_cue_pocketed(state.current_player)
+            elif ft == "last_and_8ball":
+                return self.announcer.foul_last_and_8ball(state.current_player)
+        # 故意犯规累计
+        for ft in foul_types:
+            if ft == "weak_break":
+                if intentional_count >= 3:
+                    return self.announcer.foul_intentional_third(state.current_player)
+                elif intentional_count >= 2:
+                    return self.announcer.foul_intentional_second(state.current_player)
+                return self.announcer.foul_intentional_first(state.current_player)
         # 普通犯规
         for ft in foul_types:
             if ft == "cue_pocketed":

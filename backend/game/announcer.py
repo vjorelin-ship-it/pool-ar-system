@@ -236,6 +236,119 @@ class Announcer:
     def all_clear(self) -> str:
         return "全部通关！你是大师级选手！"
 
+    # ═══ 比球详细 ═══════════════════════════════════════
+
+    def lag_ball_failed_cushion(self, player: int) -> str:
+        return f"{self.name(player)}比球犯规：球未碰顶边，{self.name(3 - player)}获得开球权"
+
+    def lag_distance(self, winner: int, dist_winner: float, dist_loser: float) -> str:
+        return (f"比球结束，{self.name(winner)}的球距底边{dist_winner:.1f}厘米，"
+                f"{self.name(3 - winner)}的球距底边{dist_loser:.1f}厘米。"
+                f"{self.name(winner)}获得开球权")
+
+    # ═══ 开球详细 ═══════════════════════════════════════
+
+    def break_8ball_potted_choice(self, player: int) -> str:
+        return (f"开球有效，8号球入袋。8号球将复位至置球点，"
+                f"请{self.name(player)}选择——继续击打，或重新开球")
+
+    def break_8ball_choice_made(self, player: int, choice: str) -> str:
+        if choice == "continue":
+            return f"{self.name(player)}选择继续击打。8号球已复位，请继续击球"
+        return f"{self.name(player)}选择重新开球。请重新开球"
+
+    def break_two_colors(self, player: int, solid_num: str, stripe_num: str) -> str:
+        return (f"开球有效。{solid_num}号和{stripe_num}号球同时入袋，"
+                f"请{self.name(player)}选择球组——全色球还是花色球？")
+
+    def break_choice_solid(self, player: int) -> str:
+        return f"{self.name(player)}选择全色球。{self.name(player)}全色球，{self.name(3 - player)}花色球"
+
+    def break_choice_stripe(self, player: int) -> str:
+        return f"{self.name(player)}选择花色球。{self.name(player)}花色球，{self.name(3 - player)}全色球"
+
+    def break_weak_warning(self) -> str:
+        return "开球犯规！小力量开球且不足4颗球碰库，视为故意犯规"
+
+    # ═══ 8号球指定袋口 ═══════════════════════════════════════
+
+    def black8_designate_pocket(self, player: int) -> str:
+        return f"{self.name(player)}已清空所有目标球，进入8号球决胜阶段。请指定8号球入袋位置"
+
+    def black8_wrong_pocket_loss(self, player: int) -> str:
+        return f"犯规！8号球未进入指定袋口。{self.name(player)}输掉本局"
+
+    # ═══ F14-F20 新增犯规 ═══════════════════════════════════════
+
+    def foul_last_and_8ball(self, player: int) -> str:
+        return f"犯规！最后一颗目标球与8号球同时入袋。{self.name(player)}输掉本局"
+
+    def foul_intentional_first(self, player: int) -> str:
+        return f"故意犯规！{self.name(player)}警告！再次故意犯规将判负一局"
+
+    def foul_intentional_second(self, player: int) -> str:
+        return f"故意犯规！{self.name(player)}本场第二次，判负本局。本局{self.name(3 - player)}获胜！"
+
+    def foul_intentional_third(self, player: int) -> str:
+        return f"故意犯规！{self.name(player)}本场第三次，判负整场比赛。{self.name(3 - player)}获胜！"
+
+    def foul_passive_warning(self, player: int) -> str:
+        return f"警告！{self.name(player)}未尽力击打合法目标球。再次出现将判负本局"
+
+    def foul_passive_loss(self, player: int) -> str:
+        return f"{self.name(player)}再次消极比赛，判负本局。本局{self.name(3 - player)}获胜！"
+
+    def foul_8ball_off_table_loss(self, player: int) -> str:
+        return f"犯规！8号球飞离台面。{self.name(player)}输掉本局"
+
+    # ═══ 限时执裁 ═══════════════════════════════════════
+
+    def time_countdown_10(self) -> str:
+        return "剩余10秒"
+
+    def time_countdown_5(self) -> str:
+        return "5"
+
+    def time_countdown_4(self) -> str:
+        return "4"
+
+    def time_countdown_3(self) -> str:
+        return "3"
+
+    def time_countdown_2(self) -> str:
+        return "2"
+
+    def time_countdown_1(self) -> str:
+        return "1"
+
+    def time_extension_granted(self) -> str:
+        return "延时30秒已批准"
+
+    def time_extension_remaining(self) -> str:
+        return "延时时间剩余10秒"
+
+    # ═══ 边界情况 ═══════════════════════════════════════
+
+    def pocket_full_warning(self) -> str:
+        return "提示：球袋已接近满袋，请注意可能的球反弹情况"
+
+    def ball_rebound_off_table(self, ball_name: str) -> str:
+        return f"犯规！{ball_name}离开台面后反弹回台面。视为球离台面"
+
+    def ball_hanging_pocket(self, ball_name: str) -> str:
+        return f"{ball_name}入袋（支撑球移除后落入）"
+
+    def simultaneous_hit_default_legal(self) -> str:
+        return "（同时击中，判定为合法目标球先被击中）"
+
+    # ═══ 暂停管理 ═══════════════════════════════════════
+
+    def timeout_granted(self, player: int) -> str:
+        return f"{self.name(player)}申请暂停。暂停时间现在开始"
+
+    def timeout_end(self, player: int) -> str:
+        return f"暂停时间结束，请{self.name(player)}继续击球"
+
     # ═══ 辅助 ═══════════════════════════════════════
 
     def cue_ball_moving(self) -> str:

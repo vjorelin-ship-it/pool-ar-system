@@ -578,6 +578,36 @@ async def save_annotate_labels(name: str, req: Request):
 
 
 # ═══════════════════════════════════════════════════════════════
+#  Match control endpoints — choose_group, break_8ball_choice
+# ═══════════════════════════════════════════════════════════════
+
+@router.post("/api/match/choose-group")
+def choose_group(group: str = ""):
+    """开球两色同时入袋后，选手选择球组 'solids' 或 'stripes'"""
+    mm = system_state.get("match_mode")
+    if not mm:
+        raise HTTPException(400, "No active match")
+    if group not in ("solids", "stripes"):
+        raise HTTPException(400, "Invalid group: must be 'solids' or 'stripes'")
+    player = mm.state.current_player
+    result = mm.choose_group(player, group)
+    return {"action": result["action"], "player": player, "group": group}
+
+
+@router.post("/api/match/break-8ball-choice")
+def break_8ball_choice(choice: str = "continue"):
+    """开球8号入袋后，选择 'continue' 或 'rebreak'"""
+    mm = system_state.get("match_mode")
+    if not mm:
+        raise HTTPException(400, "No active match")
+    if choice not in ("continue", "rebreak"):
+        raise HTTPException(400, "Invalid choice: must be 'continue' or 'rebreak'")
+    player = mm.state.current_player
+    result = mm.handle_break_8ball_choice(player, choice)
+    return {"action": result["action"], "player": player, "choice": choice}
+
+
+# ═══════════════════════════════════════════════════════════════
 #  Admin data endpoints — read persisted history files
 # ═══════════════════════════════════════════════════════════════
 
