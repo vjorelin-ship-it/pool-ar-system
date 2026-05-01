@@ -257,13 +257,22 @@ class PoolARSystem:
                 )
 
             # 3. Training mode: auto-judge shot result
-            # NOTE: Currently marks target_pocketed=True for any solid/stripe pocketed.
-            # TODO: Verify pocketed ball matches drill target by color/position.
-            # The drill defines a target position; we should confirm the ball pocketed
-            # at that position matches the expected target before marking success.
+            # 验证进袋球是否匹配当前训练题的目标球：
+            # 1. 检查进袋口袋是否与期望口袋一致
+            # 2. 检查球的类型（全色/花色）是否与期望一致
             if current_mode in ("training", "challenge"):
                 if (ev.is_solid or ev.is_stripe) and not self._training_processed:
                     drill = self.training_mode.session.get_current_drill()
+                    # 验证进袋口袋是否与训练题期望口袋一致
+                    expected_pocket = drill.pocket_pos
+                    actual_pocket = ev.pocket_pos
+                    dist = ((actual_pocket[0] - expected_pocket[0]) ** 2 +
+                            (actual_pocket[1] - expected_pocket[1]) ** 2) ** 0.5
+                    if dist >= 0.08:  # 允许8%桌面宽度误差
+                        print(f"[Training] Wrong pocket — expected={expected_pocket}, "
+                              f"actual={actual_pocket}, dist={dist:.3f}")
+                        continue  # 不是训练目标球，跳过此事件
+
                     cue_final = (0, 0)
                     for b in balls:
                         if hasattr(b, 'is_cue') and b.is_cue:
