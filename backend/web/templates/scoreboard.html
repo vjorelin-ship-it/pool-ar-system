@@ -204,6 +204,11 @@ function connectWS() {
         if (s.game_over) {
           document.getElementById('gameover').style.display = 'block';
           document.getElementById('gameover').textContent = '选手' + s.winner + ' 获胜！';
+        } else if (s.player1_score === 0 && s.player2_score === 0) {
+          // 新一局：重置球状态
+          pocketedBalls = [];
+          renderBallGrid(pocketedBalls);
+          document.getElementById('gameover').style.display = 'none';
         }
         document.getElementById('status').textContent = '比赛进行中';
         document.getElementById('status').className = 'status match';

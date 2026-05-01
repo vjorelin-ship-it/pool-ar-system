@@ -270,8 +270,18 @@ public class InProgressFragment extends Fragment {
             levelNameText.setText(data.get("level_name").getAsString());
         }
         if (drillProgressText != null && data.has("drill") && data.has("total_drills")) {
-            drillProgressText.setText("第 " + data.get("drill").getAsString() +
-                " 题 / 共 " + data.get("total_drills").getAsString() + " 题");
+            int drill = data.get("drill").getAsInt();
+            int total = data.get("total_drills").getAsInt();
+            drillProgressText.setText("第 " + drill + " 题 / 共 " + total + " 题");
+            if (progressBar != null && total > 0) {
+                ((android.widget.ProgressBar) progressBar).setProgress(drill * 100 / total);
+            }
+        }
+        if (data.has("total_attempts") && bestRecordText != null) {
+            int attempts = data.get("total_attempts").getAsInt();
+            int successes = data.has("total_successes") ? data.get("total_successes").getAsInt() : 0;
+            float rate = attempts > 0 ? (float) successes / attempts * 100 : 0;
+            bestRecordText.setText(String.format("成功率: %.0f%% (%d/%d)", rate, successes, attempts));
         }
         if (cuePosText != null && data.has("cue_pos")) {
             cuePosText.setText("● 白球: " + data.get("cue_pos").getAsString());
@@ -330,7 +340,13 @@ public class InProgressFragment extends Fragment {
             shotFeedbackText.setVisibility(View.VISIBLE);
         }
         if (consecutiveText != null && data.has("consecutive")) {
-            consecutiveText.setText("🔥 连续成功 " + data.get("consecutive").getAsInt() + " 次");
+            int cs = data.get("consecutive").getAsInt();
+            consecutiveText.setText("🔥 连续成功 " + cs + " 次");
+        }
+        // 更新总进度
+        if (data.has("passed") && data.get("passed").getAsBoolean() && totalProgressText != null) {
+            totalProgressText.setText("🏆 已通过");
+            totalProgressText.setTextColor(getResources().getColor(R.color.accent));
         }
     }
 
