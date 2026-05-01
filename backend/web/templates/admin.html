@@ -6,16 +6,19 @@
 <title>PoolAR 管理控制台</title>
 <style>
   :root {
-    --bg: #0a0e14;
-    --surface: #131820;
-    --surface2: #1a1f2b;
-    --border: #252b36;
-    --text: #c8ccd4;
-    --text-dim: #6b7280;
-    --accent: #00e5a0;
-    --accent-dim: #008055;
+    --bg: #080808;
+    --surface: #0D0D0D;
+    --surface2: #111111;
+    --border: #1A1A1A;
+    --border-hover: #2A2A2A;
+    --text: #FFFFFF;
+    --text-secondary: #888888;
+    --text-dim: #666666;
+    --accent: #FFC107;
+    --accent-dim: #C8A000;
+    --accent-light: #FFE082;
     --warn: #f0a030;
-    --danger: #e04040;
+    --danger: #FF1744;
     --info: #4090e0;
     --font: 'Segoe UI', system-ui, -apple-system, sans-serif;
     --mono: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
@@ -29,8 +32,8 @@
     font-family: var(--font);
     min-height: 100vh;
     background-image:
-      radial-gradient(ellipse at 20% 20%, rgba(0,229,160,0.03) 0%, transparent 60%),
-      radial-gradient(ellipse at 80% 60%, rgba(64,144,224,0.04) 0%, transparent 60%);
+      radial-gradient(ellipse at 20% 20%, rgba(255,193,7,0.04) 0%, transparent 60%),
+      radial-gradient(ellipse at 80% 60%, rgba(200,160,0,0.03) 0%, transparent 60%);
   }
 
   /* Header */
@@ -76,13 +79,13 @@
     transition: all 0.15s; white-space: nowrap;
   }
   .btn:hover { border-color: #4a5060; background: #252b38; }
-  .btn.accent { border-color: var(--accent-dim); color: var(--accent); background: rgba(0,229,160,0.06); }
-  .btn.accent:hover { background: rgba(0,229,160,0.12); }
+  .btn.accent { border-color: var(--accent-dim); color: var(--accent); background: rgba(255,193,7,0.08); }
+  .btn.accent:hover { background: rgba(255,193,7,0.15); }
   .btn.danger { border-color: rgba(224,64,64,0.4); color: var(--danger); }
   .btn.danger:hover { background: rgba(224,64,64,0.1); }
   .btn.warn { border-color: rgba(240,160,48,0.4); color: var(--warn); }
   .btn-group { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
-  .btn.active { border-color: var(--accent); color: var(--accent); background: rgba(0,229,160,0.10); }
+  .btn.active { border-color: var(--accent); color: var(--accent); background: rgba(255,193,7,0.12); }
 
   /* Stats */
   .stat-row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 12px; font-family: var(--mono); }
@@ -124,7 +127,7 @@
   .toggle input { opacity: 0; width: 0; height: 0; }
   .toggle .slider { position: absolute; cursor: pointer; inset: 0; background: var(--surface2); border-radius: 11px; border: 1px solid var(--border); transition: .2s; }
   .toggle .slider:before { content: ""; position: absolute; height: 14px; width: 14px; left: 3px; bottom: 3px; background: var(--text-dim); border-radius: 50%; transition: .2s; }
-  .toggle input:checked + .slider { border-color: var(--accent); background: rgba(0,229,160,0.15); }
+  .toggle input:checked + .slider { border-color: var(--accent); background: rgba(255,193,7,0.18); }
   .toggle input:checked + .slider:before { transform: translateX(18px); background: var(--accent); }
 
   .toggle-row { display: flex; align-items: center; justify-content: space-between; padding: 6px 0; font-size: 12px; }
